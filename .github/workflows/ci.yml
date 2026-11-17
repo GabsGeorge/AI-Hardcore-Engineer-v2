@@ -1,0 +1,214 @@
+name: ci
+
+on:
+  push:
+    branches: [main, 001-multi-agent-support]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: lint (ruff + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ruff check
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm tests ruff check src tests scripts
+      - name: ruff format --check
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm tests ruff format --check src tests scripts
+      - name: mypy
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm tests mypy
+
+  tests:
+    name: tests (pytest + no-stubs + traceability)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: pytest suite (rede isolada)
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm tests pytest --maxfail=1
+      - name: no stubs em src/ (constitution V)
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm tests pytest tests/test_no_stubs.py tests/test_readme.py
+      - name: rastreabilidade REQ → task → teste
+        # Bloqueante: todo REQ marcado como entregue precisa de pelo menos um teste
+        # associado (@pytest.mark.req). Falhar aqui vira defeito de rastreabilidade,
+        # nao item informativo.
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm tests python scripts/check_traceability.py
+
+  web-lint:
+    name: web-lint (eslint + prettier + tsc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: web-lint
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm web-lint
+
+  web-tests:
+    name: web-tests (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: vitest
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm web-tests
+
+  web-build:
+    name: web-build (vite production bundle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: vite build
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm web-build
+
+  compose-build:
+    name: compose-build (todos os serviços)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: docker compose build
+        # Garante que todas as imagens (api, web, ingest, tests, k6, …) sobem num clone zero.
+        # Pega regressões como o node_modules indo pro build context do web (item 1).
+        run: docker compose build
+
+  web-e2e:
+    name: web-e2e (playwright + mailpit, rede isolada)
+    runs-on: ubuntu-latest
+    env:
+      # pgvector exige senha superuser para inicializar o volume vazio do CI; o compose
+      # não traz default (prod recebe via .env). Sem isso, postgres sai com exit 1 e
+      # derruba web → web-e2e. Valor efêmero, só vale dentro deste job.
+      POSTGRES_PASSWORD: ci_test_password
+    steps:
+      - uses: actions/checkout@v4
+      # ingest/api carregam Settings no boot; jwt_secret é obrigatório (>= 32 bytes).
+      # As envs do job só chegam ao shell que invoca o compose; o compose só propaga
+      # para os containers o que estiver em .env ou expandido no YAML. Materializamos
+      # um .env efêmero com dummies longos (>= 32 bytes) só para o container subir.
+      - name: materializar .env dummy para o compose
+        run: |
+          cat > .env <<'EOF'
+          POSTGRES_PASSWORD=ci_test_password
+          JWT_SECRET=ci_jwt_secret_with_thirty_two_plus_bytes_long
+          SESSION_SECRET=ci_session_secret_thirty_two_plus_bytes_long
+          PASSWORD_PEPPER=ci_password_pepper_thirty_two_plus_bytes
+          OPENAI_API_KEY=
+          SMTP_URL=smtp://mailpit:1025
+          WEB_BASE_URL=http://web
+          EOF
+      - name: playwright e2e
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml \
+            run --rm web-e2e
+
+  # Nota: a11y (axe-core) já roda dentro do web-e2e pelo spec `01-register-login` —
+  # não precisa de job separado.
+
+  secrets:
+    name: gitleaks (histórico completo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deps:
+    name: lock (uv.lock)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: latest
+      - name: uv lock está em dia
+        run: uv lock --check
+
+  trivy-fs:
+    name: trivy (fs scan — SPA + raiz)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      # SPA: deps do package-lock vs CVEs conhecidos.
+      # Pinamos por SHA (nao por tag) para que o CI nao pegue uma retag silenciosa.
+      # Decisao do time (PR #43, 2026-11-06): exit-code=0 neste scan porque as deps
+      # HIGH/CRITICAL restantes (vite, vitest, tinypool, playwright, launch-editor, zod)
+      # sao de BUILD/TEST e NAO entram no bundle nginx de producao. Os majors que
+      # resolveriam (vite 8, vitest 5, zod 4) tem breaking changes e ficam no backlog.
+      # O SARIF segue sendo enviado para a aba Security (visibilidade); o scan raiz
+      # abaixo mantem exit-code=1 e bloqueia HIGH/CRITICAL em runtime (python+docker).
+      - name: trivy fs apps/web
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: apps/web
+          format: sarif
+          output: trivy-web.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+          ignore-unfixed: "true"
+          trivyignores: .trivyignore.yaml
+      # Raiz: pyproject + uv.lock + Dockerfiles.
+      # Dois steps: o primeiro imprime a tabela de CVEs no log (visibilidade);
+      # o segundo gera o SARIF e falha o job. Sem o step de tabela, o SARIF-only
+      # saia com exit 1 sem imprimir qual CVE disparou o bloqueio.
+      - name: trivy fs raiz — tabela (diagnóstico)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          skip-dirs: apps/web,node_modules
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+          ignore-unfixed: "true"
+          trivyignores: .trivyignore.yaml
+      - name: trivy fs raiz (python + docker)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          skip-dirs: apps/web,node_modules
+          format: sarif
+          output: trivy-root.sarif
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: "true"
+          trivyignores: .trivyignore.yaml
+      # Upload separado por scan, com category distinta: o CodeQL Action v3 nao aceita
+      # mais varios SARIF runs sob a mesma category num unico upload (mudanca 2025-07-21).
+      - name: upload sarif (web)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-web.sarif
+          category: trivy-web
+      - name: upload sarif (root)
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-root.sarif
+          category: trivy-root

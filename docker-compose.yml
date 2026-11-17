@@ -1,0 +1,200 @@
+# docker compose up -d --build   (copy .env.example to .env and fill it first)
+x-app-env: &app-env
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD:-}@postgres:5432/app
+    REDIS_URL: redis://redis:6379/0
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.0-pg16
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_DB: app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    # Tunagem para maquinas com RAM apertada (ex.: WSL2 4GB). shared_buffers padrao
+    # seria 128MB mas a conexao custa tambem; mantemos 128MB e limitamos conexoes.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - max_connections=50
+      - -c
+      - work_mem=4MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # 384m aguenta a stack em runtime mas crashou durante os evals de retrieval, onde o
+    # reranker (eval container) carrega todos os embeddings + chunks simultaneamente.
+    # 768m dá folga sem sacrificar o budget de 4GB da WSL2.
+    mem_limit: 768m
+    cpus: 1.0
+
+  redis:
+    image: redis:7.4.1-alpine
+    command: ["redis-server", "--maxmemory", "64mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    mem_limit: 96m
+    cpus: 0.5
+
+  ingest:
+    build: { context: ., target: runtime }
+    <<: *app-env
+    command: ["python", "-m", "app.rag.ingest"]
+    volumes:
+      - models-cache:/home/app/.cache
+    depends_on:
+      postgres: { condition: service_healthy }
+    mem_limit: 1g
+    cpus: 2.0
+
+  api:
+    build: { context: ., target: runtime }
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://app:${POSTGRES_PASSWORD:-}@postgres:5432/app
+      REDIS_URL: redis://redis:6379/0
+      # Em maquina apertada (<=8GB RAM), o cross-encoder FlashRank inflava a api
+      # alem do mem_limit e disparava OOM 137. Com SKIP_RERANKER=1 o retriever
+      # usa so BM25+densa (RRF) com score 0.85 no fallback.
+      SKIP_RERANKER: "${SKIP_RERANKER:-1}"
+    expose: ["8000"]
+    ports:
+      # Publicada para scripts/curls e carga (k6, scripts/issue_token.py). O nginx (web) segue
+      # como entrada da SPA em 80; os dois convivem.
+      - "8000:8000"
+    volumes:
+      - models-cache:/home/app/.cache
+    depends_on:
+      ingest: { condition: service_completed_successfully }
+      redis: { condition: service_healthy }
+      mailpit: { condition: service_started }
+    # Comporta embedding + rerank cross-encoder (~500MB modelo descarregado + numpy) + httpx
+    # pools. 1.5G era insuficiente e matava o container por OOM (exit 137). 2G cabe dentro
+    # do WSL2 4GB junto com postgres 384M + redis 96M + web 96M + mailpit 48M = ~2.6GB total.
+    mem_limit: 2g
+    cpus: 2.5
+
+  mailpit:
+    image: axllent/mailpit:v1.21.5
+    environment:
+      MP_MAX_MESSAGES: "500"
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8025/livez || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    mem_limit: 48m
+    cpus: 0.25
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    volumes:
+      - ./deploy/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      api: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1/healthz"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    mem_limit: 96m
+    cpus: 0.5
+
+  # --- Perfil `obs`: observabilidade (prometheus, grafana) -------------------------------
+  prometheus:
+    profiles: ["obs"]
+    image: prom/prometheus:v2.55.1
+    volumes:
+      - ./deploy/prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      api: { condition: service_started }
+
+  grafana:
+    profiles: ["obs"]
+    image: grafana/grafana:11.3.0
+    # Credenciais vem do .env; sem default admin/admin para o painel exposto na porta 3000.
+    # Rodar `./scripts/bootstrap_env.sh` para gerar a senha. A validacao de senha vazia
+    # fica no entrypoint abaixo em vez do interpolador do compose, para que o `up` do perfil
+    # base nao seja bloqueado quando o usuario nunca pretendeu subir o Grafana.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$$GF_SECURITY_ADMIN_PASSWORD" ]; then
+          echo "ERRO: GRAFANA_ADMIN_PASSWORD vazio no .env. Rode scripts/bootstrap_env.sh." >&2
+          exit 1
+        fi
+        exec /run.sh
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # Dashboards sao read-only (provisioning). Edicoes locais nao sobrescrevem os JSONs.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/operational.json
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      prometheus: { condition: service_started }
+
+  # --- Perfil `load`: carga sintética com k6 -----------------------------------------------
+  k6:
+    profiles: ["load"]
+    image: grafana/k6:0.54.0
+    environment:
+      BASE_URL: http://api:8000
+      AUTH_TOKEN: ${K6_AUTH_TOKEN:-}
+    volumes:
+      - ./deploy/k6:/scripts:ro
+    entrypoint: ["k6"]
+    command: ["run", "/scripts/chat.js"]
+    depends_on:
+      api: { condition: service_started }
+
+  # --- Perfil `eval`: golden set e retrieval com o modelo real (gasta tokens) --------------
+  eval:
+    profiles: ["eval"]
+    build: { context: ., target: runtime }
+    <<: *app-env
+    volumes:
+      - ./evals:/app/evals:ro
+      - models-cache:/home/app/.cache
+    command: ["python", "evals/run_eval.py"]
+    depends_on:
+      api: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  models-cache:
+  prometheus-data:
+  grafana-data:

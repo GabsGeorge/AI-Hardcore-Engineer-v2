@@ -1,0 +1,228 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useLocation, useParams } from "react-router-dom";
+import { Button, Input, useLiveAnnouncer } from "@/design";
+import { api } from "@/lib/api";
+import { streamPost } from "@/lib/sse";
+import { HandoffBanner } from "./HandoffBanner";
+import { MessageList } from "./MessageList";
+import type { ChatMessage, ChatResponseBody, HandoffRef } from "./types";
+
+type ConversationLoad = {
+  conversation_id: string;
+  handoff: HandoffRef;
+  messages: { role: "user" | "assistant"; content: string }[];
+};
+
+export function ChatPage() {
+  const { t } = useTranslation();
+  const announce = useLiveAnnouncer();
+  const params = useParams<{ id?: string }>();
+  const location = useLocation();
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [pending, setPending] = useState(false);
+  const [liveSteps, setLiveSteps] = useState<string[]>([]);
+  const [handoff, setHandoff] = useState<HandoffRef>({ status: "none", ticket_id: null });
+  const [conversationId, setConversationId] = useState<string | undefined>(params.id);
+  const [retryAt, setRetryAt] = useState<number | undefined>(undefined);
+  const abortRef = useRef<AbortController | null>(null);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  // Rola para o fim sempre que msg nova chega ou passos do agente aparecem.
+  // Resolve o P1 do e2e-register-flow: o composer sumia abaixo do viewport.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, liveSteps, pending]);
+
+  // Hidrata a conversa ao abrir pela URL /chat/:id. Resolve o P0 "conversa abre vazia"
+  // do e2e-register-flow (T020). Troca de id (nav entre conversas) tambem rehidrata.
+  useEffect(() => {
+    if (!params.id) {
+      setMessages([]);
+      setHandoff({ status: "none", ticket_id: null });
+      setConversationId(undefined);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.get<ConversationLoad>(`/v1/conversations/${params.id}`);
+        if (cancelled) return;
+        setConversationId(data.conversation_id);
+        setHandoff(data.handoff);
+        setMessages(
+          data.messages.map((m, i) =>
+            m.role === "assistant"
+              ? {
+                  id: `h-${params.id}-${i}`,
+                  role: "assistant" as const,
+                  content: m.content,
+                  agentSteps: [],
+                  sources: [],
+                  traceId: `h-${params.id}-${i}`,
+                }
+              : { id: `h-${params.id}-${i}`, role: "user" as const, content: m.content },
+          ),
+        );
+      } catch {
+        if (!cancelled) {
+          setMessages([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // T031: location.key muda a cada clique no NavLink mesmo para o mesmo /chat,
+    // entao esse useEffect dispara e reseta o estado quando o lojista clica
+    // "Conversar" durante um handoff ativo. Antes o composer ficava preso.
+  }, [params.id, location.key]);
+
+  const handoffLocked = handoff.status === "awaiting_human";
+  const canSubmit = input.trim().length > 0 && !pending && retryAt === undefined && !handoffLocked;
+
+  const send = useCallback(
+    async (text: string) => {
+      const userMessage: ChatMessage = {
+        id: `u-${Date.now()}`,
+        role: "user",
+        content: text,
+      };
+      setMessages((previous) => [...previous, userMessage]);
+      setPending(true);
+      setLiveSteps([]);
+
+      const controller = new AbortController();
+      abortRef.current = controller;
+      // Sem o evento `done` não há resposta: o servidor pode fechar o fluxo no meio ou devolver
+      // erro. Antes isso só desligava o "pensando" e a pergunta ficava sem resposta nem aviso.
+      let completed = false;
+      const showError = (key: "chat.errors.interrupted" | "chat.errors.generic") => {
+        setMessages((previous) => [
+          ...previous,
+          { id: `e-${Date.now()}`, role: "error", content: t(key) },
+        ]);
+      };
+      try {
+        await streamPost(
+          "/v1/chat/stream",
+          { message: text, conversation_id: conversationId },
+          {
+            onEvent: (name, data) => {
+              if (name === "agent_step") {
+                const node = (data as { node?: string }).node ?? "";
+                setLiveSteps((steps) => (steps.includes(node) ? steps : [...steps, node]));
+              } else if (name === "handoff") {
+                const payload = data as HandoffRef;
+                setHandoff(payload);
+              } else if (name === "done") {
+                completed = true;
+                const final = data as ChatResponseBody;
+                setConversationId(final.conversation_id);
+                setHandoff(final.handoff);
+                // Suprime bolha vazia em handoff awaiting_human: o HandoffBanner ja comunica
+                // "aguardando atendente". Antes a UI pintava um cartao em branco (P0 do
+                // e2e-register-flow 3b/3c).
+                const hasText = (final.response ?? "").trim().length > 0;
+                const isAwaitingHuman = final.handoff.status === "awaiting_human";
+                if (hasText || !isAwaitingHuman) {
+                  setMessages((previous) => [
+                    ...previous,
+                    {
+                      id: `a-${final.trace_id}`,
+                      role: "assistant",
+                      content: final.response,
+                      agentSteps: final.route,
+                      sources: final.sources,
+                      traceId: final.trace_id,
+                    },
+                  ]);
+                  announce(final.response);
+                }
+                setPending(false);
+                setLiveSteps([]);
+              }
+            },
+            onError: () => {
+              setPending(false);
+              setLiveSteps([]);
+            },
+            onDone: () => {
+              setPending(false);
+            },
+          },
+          controller.signal,
+        );
+        if (!completed && !controller.signal.aborted) {
+          showError("chat.errors.interrupted");
+        }
+      } catch (err) {
+        setPending(false);
+        setLiveSteps([]);
+        if (controller.signal.aborted) {
+          return;
+        }
+        if (err instanceof Error && err.message === "sse_http_429") {
+          setRetryAt(Date.now() + 60_000);
+          window.setTimeout(() => setRetryAt(undefined), 60_000);
+          return;
+        }
+        showError(completed ? "chat.errors.interrupted" : "chat.errors.generic");
+      }
+    },
+    [announce, conversationId, t],
+  );
+
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canSubmit) {
+      return;
+    }
+    const text = input.trim();
+    setInput("");
+    void send(text);
+  }
+
+  useEffect(() => () => abortRef.current?.abort(), []);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <HandoffBanner handoff={handoff} slaBreached={false} />
+      <MessageList messages={messages} pending={pending} liveSteps={liveSteps} />
+      <form
+        onSubmit={onSubmit}
+        className="sticky bottom-0 flex items-end gap-2 border-t border-line bg-surface-100 pb-2 pt-4"
+      >
+        <label className="sr-only" htmlFor="chat-input">
+          {t("chat.inputLabel")}
+        </label>
+        <Input
+          id="chat-input"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder={
+            handoffLocked ? t("chat.handoffLockPlaceholder") : t("chat.inputPlaceholder")
+          }
+          disabled={pending || retryAt !== undefined || handoffLocked}
+          aria-busy={pending || undefined}
+          className={handoffLocked ? "cursor-not-allowed bg-surface-200 text-ink-400" : undefined}
+        />
+        <Button type="submit" loading={pending} disabled={!canSubmit}>
+          {t("chat.send")}
+        </Button>
+      </form>
+      {retryAt !== undefined ? (
+        <p className="text-label text-state-warning" role="status">
+          {t("chat.rateLimited")}
+        </p>
+      ) : null}
+      {handoffLocked ? (
+        <p className="text-label text-ink-500" role="status">
+          {t("chat.handoffLockHint")}
+        </p>
+      ) : null}
+      <div ref={bottomRef} aria-hidden="true" />
+    </div>
+  );
+}

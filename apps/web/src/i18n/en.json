@@ -1,0 +1,235 @@
+{
+  "app": {
+    "title": "Getnet Support",
+    "signOut": "Sign out",
+    "loading": "Loading…"
+  },
+  "nav": {
+    "chat": "Chat",
+    "history": "History",
+    "queue": "Queue",
+    "admin": "Admin",
+    "privacy": "Privacy"
+  },
+  "auth": {
+    "signInTitle": "Sign in",
+    "signInSubtitle": "Use your e-mail and password to continue.",
+    "email": "E-mail",
+    "password": "Password",
+    "signIn": "Sign in",
+    "forgot": "Forgot your password",
+    "sendReset": "Send link",
+    "resetTitle": "Set a new password",
+    "newPassword": "New password",
+    "setPassword": "Change password",
+    "register": "Create account",
+    "createAccountTitle": "Create account",
+    "name": "Name",
+    "createAccount": "Create account",
+    "confirmSentTitle": "Check your inbox",
+    "confirmSentBody": "If the e-mail is registered, we sent a confirmation link.",
+    "verifyTitle": "Confirming your e-mail",
+    "verifyOk": "E-mail confirmed. Sign in to begin.",
+    "verifyFail": "The link is not valid or has expired. Request a new one on the sign-in page.",
+    "errors": {
+      "generic": "Could not continue. Please try again.",
+      "credentials": "Invalid credentials.",
+      "locked": "Too many attempts. Try again in {{seconds}}s.",
+      "rateLimited": "Too many requests. Try again in {{seconds}}s.",
+      "weakPassword": "Password must be at least 12 characters and not one of the most used."
+    }
+  },
+  "chat": {
+    "inputLabel": "Message",
+    "inputPlaceholder": "Ask about fees, card machine, Pix, receivables advance…",
+    "send": "Send",
+    "thinking": "Thinking…",
+    "sources": "Sources",
+    "rateLimited": "Too many messages within a minute. Wait a moment before sending again.",
+    "errors": {
+      "interrupted": "The answer was interrupted before it finished. Please send your question again.",
+      "generic": "I could not answer right now. Please try again in a moment."
+    },
+    "handoffLockPlaceholder": "Waiting for a human agent to reply…",
+    "handoffLockHint": "While the ticket is with a human agent, new messages are blocked.",
+    "handoff": {
+      "waitingTitle": "Waiting for a human agent",
+      "waitingBody": "Your request is in the queue as ticket {{ticket}}.",
+      "slaTitle": "The reply is taking longer than usual",
+      "slaBody": "We've bumped the priority; the agent's reply will appear here as soon as it arrives.",
+      "resolvedTitle": "Replied",
+      "resolvedBody": "A human agent replied to your request.",
+      "expiredTitle": "Ticket expired",
+      "expiredBody": "We couldn't attend in time. If you still need help, send a new message."
+    }
+  },
+  "privacy": {
+    "title": "Privacy",
+    "body": "You control your data at any time. Pick one of the actions below.",
+    "deleteConvsTitle": "Delete my conversations",
+    "deleteConvsBody": "Removes the chat history and the associated checkpoints. Your account stays active.",
+    "deleteConvsAction": "Delete conversations",
+    "deleteAccountTitle": "Delete my account",
+    "deleteAccountBody": "Deletes conversations, name, e-mail and password. Unlinks your establishment (the establishment data stays because it is not yours). The audit trail is kept, pseudonymised.",
+    "deleteAccountAction": "Delete account",
+    "currentPassword": "Current password",
+    "badPassword": "Wrong password. Try again.",
+    "confirmLabel": "Type {{word}} to confirm",
+    "confirmHelp": "This action only runs when the text matches {{word}}.",
+    "deleted": "Conversations deleted.",
+    "accountDeleted": "Account deleted.",
+    "deleteError": "Could not complete. Try again.",
+    "deletedSummary": "What was deleted",
+    "summary": {
+      "conversations": "conversations",
+      "feedback": "ratings",
+      "audit_events_pseudonymized": "pseudonymised audit events"
+    }
+  },
+  "history": {
+    "title": "Your conversations",
+    "emptyTitle": "Nothing here yet",
+    "emptyBody": "Start a conversation to see it listed here.",
+    "start": "Start a conversation",
+    "loadMore": "Load more",
+    "loadingMore": "Loading…",
+    "noPreview": "(no preview available)",
+    "status": {
+      "awaiting_human": "Waiting for a human agent",
+      "resolved": "Replied",
+      "expired": "Expired"
+    }
+  },
+  "queue": {
+    "title": "Handoff queue",
+    "emptyTitle": "Nothing here",
+    "emptyBody": "No tickets waiting for an agent.",
+    "priorityHigh": "High priority",
+    "priorityNormal": "Normal",
+    "slaBreached": "SLA breached",
+    "timeRemaining": "{{minutes}} minutes",
+    "reason": {
+      "human_request": "Merchant request",
+      "sensitive_topic": "Sensitive topic",
+      "low_confidence": "Low confidence",
+      "repeated_failures": "Repeated failures",
+      "side_effect_action": "Side-effect action"
+    }
+  },
+  "ticket": {
+    "title": "Ticket detail",
+    "loading": "Open the ticket from the queue to load its context.",
+    "summary": "Summary",
+    "context": "Context",
+    "pendingAction": "Pending action",
+    "pendingActionBody": "The merchant asked for an action that needs operator approval: {{type}}.",
+    "decisionLegend": "Pending action decision",
+    "approve": "Approve",
+    "reject": "Reject",
+    "missingDecision": "Choose approve or reject before sending.",
+    "replyLabel": "Reply to the merchant",
+    "replyPlaceholder": "Explain what was done or the next step",
+    "send": "Send reply",
+    "sent": "Reply sent.",
+    "alreadyClosed": "This ticket has already been closed.",
+    "sendError": "Could not send. Try again."
+  },
+  "admin": {
+    "home": {
+      "title": "Administration",
+      "subtitle": "Invite operators and admins, link accounts to establishments and watch the queue and audit.",
+      "accountsTitle": "Accounts",
+      "accountsBody": "List, invite and deactivate operators/admins/merchants.",
+      "accountsAction": "Open accounts",
+      "linkTitle": "Link merchant",
+      "linkBody": "Link a merchant account to an existing establishment.",
+      "linkAction": "Open links",
+      "queueTitle": "Today's queue",
+      "queueBody": "Snapshot of today's handoff metrics.",
+      "queueAction": "Open queue",
+      "auditTitle": "Audit",
+      "auditBody": "Security and authorship events; merchant actors are pseudonymised where applicable.",
+      "auditAction": "Open audit"
+    },
+    "accounts": {
+      "title": "Accounts",
+      "filterRole": "Role",
+      "filterStatus": "Status",
+      "any": "Any",
+      "roleLabel": "Role",
+      "statusLabel": "Status",
+      "linked": "Linked to {{merchant}}",
+      "notLinked": "Not linked",
+      "invite": "Invite operator/admin",
+      "deactivate": "Deactivate",
+      "activate": "Reactivate",
+      "emptyTitle": "No accounts",
+      "emptyBody": "Adjust the filters or invite a new one.",
+      "inviteDialogTitle": "Invite new account",
+      "inviteName": "Name",
+      "inviteEmail": "E-mail",
+      "inviteRole": "Role",
+      "inviteSend": "Send invite",
+      "inviteSent": "Invitation sent.",
+      "deactivateConfirmTitle": "Deactivate account",
+      "deactivateConfirmBody": "This revokes every active session. Are you sure?",
+      "deactivated": "Account deactivated.",
+      "activated": "Account reactivated.",
+      "sendError": "Could not complete. Try again.",
+      "cancel": "Cancel",
+      "confirm": "Confirm"
+    },
+    "link": {
+      "title": "Link merchant to establishment",
+      "subtitle": "Enter the establishment ID (e.g. cliente1988) and pick the merchant account.",
+      "merchantIdLabel": "Establishment ID",
+      "accountLabel": "Merchant account",
+      "selectAccount": "Pick an account",
+      "linkAction": "Link",
+      "unlinkAction": "Unlink",
+      "linked": "Linked.",
+      "unlinked": "Unlinked.",
+      "conflict": "This establishment is already linked to another account.",
+      "sendError": "Could not complete. Try again."
+    },
+    "queueOverview": {
+      "title": "Today's queue",
+      "awaiting": "Awaiting a human agent",
+      "slaBreached": "SLA breached today",
+      "expired": "Expired today",
+      "goToQueue": "Open the queue"
+    },
+    "audit": {
+      "title": "Audit",
+      "filterAction": "Action",
+      "filterSince": "Since",
+      "any": "Any action",
+      "columnTs": "When",
+      "columnActor": "Actor",
+      "columnAction": "Action",
+      "columnTarget": "Target",
+      "columnOutcome": "Outcome",
+      "columnTrace": "Trace",
+      "pseudonymised": "pseudonymised merchant",
+      "emptyTitle": "No events",
+      "emptyBody": "Adjust the filters."
+    },
+    "invite": {
+      "title": "Accept invitation",
+      "subtitle": "Set your name and password to activate the account.",
+      "name": "Name",
+      "newPassword": "New password",
+      "submit": "Activate account",
+      "ok": "Account activated. Sign in with your new password.",
+      "fail": "The invitation is not valid or has expired. Ask the admin for a new one."
+    }
+  },
+  "accessDenied": {
+    "title": "Access denied",
+    "body": "You don't have permission to open this page."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The address you opened does not exist."
+  }
+}

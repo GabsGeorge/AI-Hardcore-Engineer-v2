@@ -1,0 +1,108 @@
+# Tests and lint run here, on an internal network with no route to the internet (REQ-INF-03).
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm lint
+x-test-env: &test-env
+  DATABASE_URL: postgresql://test:test@test-postgres:5432/test
+  REDIS_URL: redis://test-redis:6379/0
+  APP_ENV: test
+  # Os testes de retrieval validam o pipeline híbrido + reranker (FakeReranker). O padrão
+  # de produção é `dense`, coberto por tests/integration/test_retriever_dense.py.
+  RAG_STRATEGY: hybrid_rerank
+
+services:
+  test-postgres:
+    image: pgvector/pgvector:0.8.0-pg16
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_DB: test
+      POSTGRES_PASSWORD: test
+    tmpfs:
+      - /var/lib/postgresql/data
+    networks: [testnet]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d test"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  test-redis:
+    image: redis:7.4.1-alpine
+    networks: [testnet]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  tests:
+    build: { context: ., target: dev }
+    environment: *test-env
+    volumes:
+      - .:/repo
+    networks: [testnet]
+    command: ["pytest", "--cov", "--cov-report=term-missing:skip-covered"]
+    depends_on:
+      test-postgres: { condition: service_healthy }
+      test-redis: { condition: service_healthy }
+
+  lint:
+    build: { context: ., target: dev }
+    volumes:
+      - .:/repo
+    network_mode: none
+    command: ["sh", "-c", "ruff check . && ruff format --check . && mypy"]
+
+  # --- Frontend (feature 002) --------------------------------------------------------------
+  # Shared Node image: install once, mount the source, reuse for lint / unit / E2E.
+  # The three services below fall back to `npm install` when package-lock.json is absent
+  # (first bootstrap). The CI commits a lockfile and `npm ci` runs after that.
+  # web-lint and web-tests use the default bridge network because npm install needs the public
+  # registry; the Playwright E2E (web-e2e) stays on testnet because at that point the SPA is
+  # already built into the web image and no external download is needed.
+  web-lint:
+    image: node:22.11.0-alpine
+    working_dir: /app
+    volumes:
+      - ./apps/web:/app
+    # `exec npm run lint` replaces the shell as PID 1 so the container's exit code is the
+    # exact one npm returns; the previous `; npm run lint` chain let docker surface 0 even
+    # when ESLint failed.
+    command: ["sh", "-c", "set -e; if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi; exec npm run lint"]
+
+  web-tests:
+    image: node:22.11.0-alpine
+    working_dir: /app
+    volumes:
+      - ./apps/web:/app
+    command: ["sh", "-c", "set -e; if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi; exec npm run test"]
+
+  # Vite production build: valida que o SPA compila (TypeScript estrito + Vite). Falhas
+  # aqui pegam regressões de tipo que `lint`/`tsc --noEmit` deixa passar quando a emissão
+  # está desligada, e falhas de import que só aparecem no bundle.
+  web-build:
+    image: node:22.11.0-alpine
+    working_dir: /app
+    volumes:
+      - ./apps/web:/app
+    command: ["sh", "-c", "set -e; if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi; exec npm run build"]
+
+  web-e2e:
+    image: mcr.microsoft.com/playwright:v1.49.0-jammy
+    working_dir: /app
+    volumes:
+      - ./apps/web:/app
+    environment:
+      PLAYWRIGHT_BASE_URL: http://web
+      MAILPIT_URL: http://mailpit:8025
+    # testnet é internal (sem internet), então o `npm ci` runtime não consegue baixar
+    # o playwright binário. `default` dá saída pública; mantemos `testnet` para alcançar
+    # web/api/mailpit via DNS do compose. Ordem importa: o serviço pode usar as duas.
+    networks: [testnet, default]
+    depends_on:
+      web: { condition: service_healthy }
+      mailpit: { condition: service_healthy }
+    command: ["sh", "-c", "[ -f package-lock.json ] && npm ci || npm install --no-audit --no-fund; npx playwright install --with-deps chromium; npm run e2e"]
+
+networks:
+  testnet:
+    internal: true
