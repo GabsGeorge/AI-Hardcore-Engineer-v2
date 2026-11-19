@@ -1,6 +1,6 @@
 # Getnet Multi-Agent Support
 
-[![ci](https://github.com/GabsGeorge/AI-Hardcore-Engineer/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/GabsGeorge/AI-Hardcore-Engineer/actions/workflows/ci.yml)
+[![ci](https://github.com/GabsGeorge/AI-Hardcore-Engineer-v2/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/GabsGeorge/AI-Hardcore-Engineer-v2/actions/workflows/ci.yml)
 
 Plataforma de atendimento com agentes multi-especialistas para lojistas Getnet. O caminho feliz
 responde em até 8 s por LLM + RAG + tools; falhas, dúvidas sensíveis e ações com efeito colateral
@@ -264,11 +264,12 @@ Spec Driven Development via **GitHub Spec Kit** (`uvx spec-kit`), em sequência:
    [specs/001-multi-agent-support/checklists/block-review.md](specs/001-multi-agent-support/checklists/block-review.md).
 7. `/speckit.implement` → implementação por tarefa.
 
-Rastreabilidade **REQ → tarefa → teste → commit**:
+Rastreabilidade **REQ → tarefa → teste**:
 
 - `@pytest.mark.req("REQ-...")` em cada teste.
 - `scripts/check_traceability.py` gera [docs/traceability.md](docs/traceability.md).
-- Commits no formato `feat(T049): descrição [REQ-...]`.
+
+Este repositório é a versão de entrega: o histórico de desenvolvimento foi consolidado em um único commit.
 
 ---
 
