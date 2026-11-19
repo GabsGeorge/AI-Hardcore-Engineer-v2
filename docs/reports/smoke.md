@@ -152,6 +152,14 @@ pii         1/1
   é o próximo passo?" como fora de escopo, e o flag `masked` não voltava. O prompt passou a tratar
   "documento próprio + pergunta de próximo passo" como turno de suporte. Medido com o LLM real: `masked`
   em 20/20; "CPF + poema", "CPF + receita de bolo" e "mostre as transações do CPF ..." seguem barrados (15/15).
+- **Cenário 03 ("quando cai o dinheiro das vendas de ontem")**: a rodada de 17/11 rodou uma vez e
+  passou, mas num clone limpo (19/11) errou em 5 de 6 tentativas ("não há recebíveis"): a ferramenta
+  filtrava só pela data de pagamento, e o modelo pedia a data de ontem. `get_settlement_schedule` agora
+  também casa pela data da venda e devolve `sale_date`. Medido com o LLM real depois da correção:
+  EN 10/10, PT 13/15 (as 2 falhas ainda dizem "não há registros"; os argumentos da ferramenta não são
+  registrados, então a causa delas não foi isolada). "Quanto recebo hoje" e "próxima semana" corretos.
+  Achado à parte, anterior a esta mudança: em "quanto recebi nos últimos 7 dias" o modelo somou errado
+  uma vez (R$ 34,50 em vez de R$ 343,50); a soma não vem de uma ferramenta.
 - **Recall@5 do retrieval**: 0,798 no conjunto rotulado ampliado, abaixo do gate aspiracional de 0,90
   ([ADR 0003](../adr/0003-busca-hibrida.md)). Amostra pequena (14 perguntas rotuladas, 10 sem fonte).
 - **Pipeline híbrido + rerank** continua implementado e testado, mas não é o padrão (`RAG_STRATEGY`) e

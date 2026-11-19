@@ -44,11 +44,23 @@ async def test_settlement_schedule_groups_yesterdays_sales(seeded: Pool) -> None
     assert all(isinstance(d, TOOL_OUTPUTS["get_settlement_schedule"]) for d in out)
     assert [d.model_dump() for d in out] == [
         {
+            "sale_date": date(2026, 10, 12),
             "expected_date": REFERENCE,
             "amount_cents": 46065,
             "status": "scheduled",
             "transaction_count": 3,
         }
+    ]
+
+
+async def test_settlement_schedule_finds_yesterdays_sales_by_sale_date(seeded: Pool) -> None:
+    # "When is yesterday's money paid?": the window is the sale day, not the payment day.
+    out, record = await _call(
+        "get_settlement_schedule", {"from_date": "2026-10-12", "to_date": "2026-10-12"}
+    )
+    assert record["status"] == "ok"
+    assert [(d.sale_date, d.expected_date, d.amount_cents, d.transaction_count) for d in out] == [
+        (date(2026, 10, 12), REFERENCE, 46065, 3)
     ]
 
 
