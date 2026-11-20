@@ -54,6 +54,7 @@ class GetSettlementScheduleInput(_Input):
 
 
 class SettlementDay(BaseModel):
+    sale_date: date
     expected_date: date
     amount_cents: int
     status: Literal["scheduled", "paid", "anticipated"]
@@ -177,7 +178,10 @@ TOOL_OUTPUTS: dict[str, type[BaseModel]] = {
 TOOL_DESCRIPTIONS: dict[str, str] = {
     "search_knowledge_base": "Search public Getnet content (products, fees, help center).",
     "web_search": "Search the public web for general questions (weather, exchange rates).",
-    "get_settlement_schedule": "Expected settlements (receivables) of the current merchant.",
+    "get_settlement_schedule": (
+        "Settlements (receivables) of the current merchant whose sale date or payment date"
+        " (expected_date) falls in the window."
+    ),
     "diagnose_terminal": "Status and suggested checks of the current merchant's terminals.",
     "lookup_decline_code": "Meaning and recommended action for a card decline code.",
     "get_recent_transactions": "Recent sales of the current merchant, optionally only declined.",

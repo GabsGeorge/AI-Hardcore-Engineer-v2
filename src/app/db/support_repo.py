@@ -16,13 +16,19 @@ async def _fetch(pool: Pool, sql: str, params: tuple[Any, ...]) -> list[dict[str
 async def settlement_schedule(
     pool: Pool, merchant_id: str, from_date: date, to_date: date
 ) -> list[dict[str, Any]]:
+    """Settlements whose sale day (merchant local time) or payment day falls in the window:
+    "when is yesterday's money paid" asks by sale day, "what do I get today" by payment day."""
     return await _fetch(
         pool,
-        "SELECT expected_date, sum(amount_cents)::bigint AS amount_cents, status,"
-        " count(*)::int AS transaction_count FROM settlements"
-        " WHERE merchant_id = %s AND expected_date BETWEEN %s AND %s"
-        " GROUP BY expected_date, status ORDER BY expected_date, status",
-        (merchant_id, from_date, to_date),
+        "SELECT sale_date, expected_date, sum(amount_cents)::bigint AS amount_cents, status,"
+        " count(*)::int AS transaction_count FROM ("
+        "  SELECT (t.created_at AT TIME ZONE 'America/Sao_Paulo')::date AS sale_date,"
+        "         s.expected_date, s.amount_cents, s.status"
+        "  FROM settlements s JOIN transactions t ON t.id = s.transaction_id"
+        "  WHERE s.merchant_id = %s) AS rows"
+        " WHERE expected_date BETWEEN %s AND %s OR sale_date BETWEEN %s AND %s"
+        " GROUP BY sale_date, expected_date, status ORDER BY expected_date, sale_date, status",
+        (merchant_id, from_date, to_date, from_date, to_date),
     )
 
 
