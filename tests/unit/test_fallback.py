@@ -8,6 +8,7 @@ from pydantic import SecretStr
 
 from app.core.config import get_settings
 from app.core.llm import get_model
+from app.observability.tracing import TracedModel
 
 
 @pytest.fixture
@@ -21,7 +22,9 @@ def real_models(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.mark.usefixtures("real_models")
 def test_fallback_model_is_chained_when_configured(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(get_settings(), "openai_model_fallback", "fallback-model")
-    model = get_model("supervisor")
+    traced = get_model("supervisor")
+    assert isinstance(traced, TracedModel)  # every role call opens an llm.<role> span
+    model = traced.inner
     assert isinstance(model, RunnableWithFallbacks)
     assert model.runnable.model_name == "primary-model"  # type: ignore[attr-defined]
     assert model.fallbacks[0].model_name == "fallback-model"  # type: ignore[attr-defined]
@@ -31,4 +34,4 @@ def test_fallback_model_is_chained_when_configured(monkeypatch: pytest.MonkeyPat
 @pytest.mark.usefixtures("real_models")
 def test_no_fallback_chain_without_fallback_model(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(get_settings(), "openai_model_fallback", "")
-    assert not isinstance(get_model("supervisor"), RunnableWithFallbacks)
+    assert not isinstance(get_model("supervisor").inner, RunnableWithFallbacks)

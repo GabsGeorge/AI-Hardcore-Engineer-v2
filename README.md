@@ -27,9 +27,10 @@ docker compose up -d --build         # api, web (nginx servindo dist), mailpit, 
 ```
 
 > O script `scripts/bootstrap_env.sh` e idempotente — so preenche campos vazios. Rode de novo
-> sempre que apagar o `.env`. O perfil `obs` (Prometheus + Grafana) e opcional: `docker compose
-> --profile obs up -d` para subir junto; sem o perfil, a stack mínima roda sem exigir
-> `GRAFANA_ADMIN_PASSWORD`.
+> sempre que apagar o `.env`. O perfil `obs` (Prometheus + Tempo + Grafana) e opcional: `docker
+> compose --profile obs up -d` para subir junto; sem o perfil, a stack mínima roda sem exigir
+> `GRAFANA_ADMIN_PASSWORD` (deixe `OTEL_EXPORTER_OTLP_ENDPOINT=` vazio no `.env` para a api não
+> tentar exportar spans para um Tempo que não está de pé).
 
 - **API**  → `http://localhost:8000` (todos os `curl` de "Como avaliar" apontam aqui).
 - **UI web** → `http://localhost` (nginx na porta 80 servindo o SPA).
@@ -45,6 +46,30 @@ Redis, modelos e cache).
 docker compose run --rm api python scripts/issue_token.py cliente1988 --role merchant
 docker compose run --rm api python scripts/issue_token.py operador01 --role operator
 ```
+
+### Sem Docker (modo local leve)
+
+Para rodar só a api numa máquina sem Docker (Windows, macOS ou Linux), com
+[uv](https://docs.astral.sh/uv/):
+
+```bash
+uv sync --group local
+uv run python scripts/run_local.py
+```
+
+`scripts/run_local.py` sobe um Postgres 16 + pgvector embutido (pacote `pgserver`, dados em
+`.local/`), um Redis em processo (`fakeredis`), roda migrações + seed de demonstração e a api em
+`http://127.0.0.1:8000`, com métricas em `:9100`. Ele imprime um token do lojista de demonstração
+`cliente1988` pronto para usar. Com `OPENAI_API_KEY` no `.env`, a ingestão das páginas roda na primeira subida;
+sem chave, a api sobe mas `POST /v1/chat` falha.
+
+Traces sem Grafana: rode o [Jaeger](https://www.jaegertracing.io/download/) (um executável só,
+recebe OTLP em `:4318`, interface em `http://localhost:16686`) e suba a api com
+`--otlp http://127.0.0.1:4318`; cole o `trace_id` da resposta na busca do Jaeger.
+
+Limites: é para desenvolvimento de uma pessoa. Sem web (SPA), Mailpit, Prometheus/Grafana nem
+reranker (`SKIP_RERANKER=1`; o FlashRank precisa do onnxruntime, que no Windows exige o Visual C++
+Redistributable). O `fakeredis` não persiste nada entre execuções.
 
 ---
 
@@ -164,18 +189,26 @@ tickets).
 
 ## Observabilidade
 
-Logs estruturados por request com `trace_id` já estão on. Spans OTel marcam `supervisor.plan`
-com `prompt.version` (sha256[:12] do prompt). Métricas Prometheus na porta interna 9100 (não publicada; só o Prometheus da rede do compose lê) cobrem
-HTTP, rota, tokens, erros de tool, bloqueios de guardrail e handoffs.
+Logs estruturados por request com `trace_id` já estão on. Cada turno gera uma árvore de spans
+OTel: um span por nó do grafo (`input_guardrail`, `supervisor`, `knowledge`, `support`,
+`escalation`, `synthesize`, `output_guardrail`), um `llm.<papel>` por chamada de modelo (modelo,
+tokens de entrada/saída, latência, `prompt.version`), um `tool.<nome>` por tool e os spans
+`retrieval.*` (embedding, BM25, densa, rerank). Métricas Prometheus na porta interna 9100 (não
+publicada; só o Prometheus da rede do compose lê) cobrem HTTP, rota, tokens, erros de tool,
+bloqueios de guardrail, handoffs e a avaliação online (`getnet_online_eval_score`).
 
 ```bash
-docker compose --profile obs up -d       # sobe prometheus (9090) e grafana (3000)
+docker compose --profile obs up -d       # sobe prometheus (9090), tempo e grafana (3000)
 ```
 
-Dashboards provisionados: **Operacional** (p95, QPS, rota, bloqueios), **Qualidade**
-(guardrail por tipo, tokens por papel, handoffs por razão) e **Custo** (tokens totais e por
-papel). Alertas de SLO em `deploy/prometheus/alerts.yml` disparam em p95 > 8 s por 10 min,
-erro de tool > 5 %, pico de bloqueios, fila crescendo e circuito do LLM aberto.
+Com o profile `obs`, a api exporta os spans para o Grafana Tempo (`http://tempo:4318`) e o
+`trace_id` da resposta abre a árvore no dashboard **Getnet - Trace**
+(`deploy/grafana/dashboards/trace.json`). Dashboards de métricas: **Operacional** (p95, QPS, rota,
+bloqueios), **Qualidade** (guardrail por tipo, tokens por papel, handoffs por razão, média 1 h do
+juiz online) e **Custo** (tokens totais e por papel). Alertas em `deploy/prometheus/alerts.yml`:
+p95 > 8 s por 10 min, erro de tool > 5 %, pico de bloqueios, fila de handoff crescendo e média do
+juiz online < 0,7 em 1 h. Detalhes e comandos de validação em
+[docs/reports/observability.md](docs/reports/observability.md).
 
 ## Streaming (SSE)
 

@@ -29,3 +29,9 @@ AUTH_EMAIL_ERRORS = Counter(
     "getnet_auth_email_errors_total", "Transactional e-mail errors.", labelnames=("kind",)
 )
 SESSIONS_ACTIVE = Counter("getnet_auth_sessions_opened_total", "Sessions opened via login.")
+ONLINE_EVAL_SCORE = Histogram(
+    "getnet_online_eval_score",
+    "LLM-as-judge: faithfulness e relevance amostrados em produção (0-1).",
+    labelnames=("metric",),
+    buckets=(0.0, 0.3, 0.5, 0.7, 0.8, 0.9, 1.0),
+)

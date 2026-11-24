@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 39,
+  "title": "Getnet - Trace",
+  "uid": "getnet-trace",
+  "editable": false,
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "trace_id",
+        "label": "trace_id (campo da resposta de POST /v1/chat)",
+        "type": "textbox",
+        "query": ""
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "traces",
+      "title": "Árvore de spans do turno",
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 22 },
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "queryType": "traceql",
+          "query": "${trace_id}"
+        }
+      ]
+    }
+  ]
+}

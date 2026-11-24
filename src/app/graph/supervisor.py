@@ -15,7 +15,7 @@ from app.core.llm import get_model
 from app.core.prompts import load_prompt
 from app.graph.state import AgentResult, AgentState, PlanModel
 from app.graph.synthesize import language_cues, settle_language
-from app.observability.metrics import ROUTE_TAKEN, TOKENS
+from app.observability.metrics import ROUTE_TAKEN
 
 Decision = Literal["synthesize", "replan", "escalate", "degrade"]
 RECENT_MESSAGES = 6
@@ -87,8 +87,7 @@ async def plan_turn(state: AgentState) -> tuple[PlanModel | None, int]:
             usage = getattr(out.get("raw"), "usage_metadata", None) or {}
             used = int(usage.get("total_tokens", 0))
             tokens += used
-            if used:
-                TOKENS.labels("supervisor").inc(used)
+            if used:  # getnet_tokens_total is counted by the llm.supervisor span (TracedModel)
                 span.set_attribute("llm.tokens", tokens)
             parsed = out.get("parsed")
             if isinstance(parsed, PlanModel):

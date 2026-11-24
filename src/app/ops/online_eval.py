@@ -21,32 +21,21 @@ import random
 from typing import Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from prometheus_client import Histogram
 from pydantic import BaseModel, Field
 
 from app.core.config import get_settings
 from app.core.llm import get_model
+from app.core.prompts import load_prompt
 from app.observability.logging import get_logger
+from app.observability.metrics import ONLINE_EVAL_SCORE
 
-ONLINE_EVAL_SCORE = Histogram(
-    "getnet_online_eval_score",
-    "LLM-as-judge: faithfulness e relevance amostrados em produção (0-1).",
-    labelnames=("metric",),
-    buckets=(0.0, 0.3, 0.5, 0.7, 0.8, 0.9, 1.0),
-)
+__all__ = ["ONLINE_EVAL_SCORE", "schedule_score_turn", "score_turn", "should_sample"]
 
 
 class JudgeVerdict(BaseModel):
     faithfulness: float = Field(ge=0.0, le=1.0)
     relevance: float = Field(ge=0.0, le=1.0)
     reason: str = Field(default="", max_length=200)
-
-
-_JUDGE_PROMPT = (
-    "You are an evaluator. Given a merchant question, a final answer and the sources used,"
-    " score 0..1 for faithfulness (answer stays within sources) and relevance (answer actually"
-    " addresses the question). Keep the reason under 200 chars."
-)
 
 
 def should_sample() -> bool:
@@ -59,7 +48,7 @@ async def _judge(question: str, answer: str, sources_block: str) -> JudgeVerdict
         model = get_model("online_eval").with_structured_output(JudgeVerdict)
         result = await model.ainvoke(
             [
-                SystemMessage(content=_JUDGE_PROMPT),
+                SystemMessage(content=load_prompt("online_eval").strip()),
                 HumanMessage(
                     content=(
                         f"Question:\n{question}\n\nAnswer:\n{answer}\n\nSources:\n{sources_block}"

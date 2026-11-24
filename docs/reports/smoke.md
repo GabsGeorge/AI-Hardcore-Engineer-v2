@@ -6,6 +6,17 @@ Resultados reais contra a stack no compose, com o modelo real (`gpt-4o-mini` + `
 `RAG_STRATEGY=dense` (limiar 0,40), sem reranker, `CONFIDENCE_REPLAN=0,70` e `CONFIDENCE_ESCALATE_HARD=0,40`.
 Nenhum piso de confiança, nenhuma exceção "knowledge-only" no supervisor e nenhum atalho no grounding.
 
+> **Auditoria 2026-11-24**: conferido contra o código — padrões `RAG_STRATEGY=dense`,
+> `RAG_DENSE_THRESHOLD=0.40`, `CONFIDENCE_REPLAN=0.70`, `CONFIDENCE_ESCALATE_HARD=0.40`
+> (`src/app/core/config.py`), `SKIP_RERANKER=1` no compose, `CONTROL_RUNS` em
+> `scripts/smoke_report.py`, os 21 ids de `evals/golden_set.yaml`, `settle_language`, a fonte
+> Open-Meteo/AwesomeAPI em `src/app/tools/public_data.py` e a correção do cenário 03 (commit
+> `c57ba64`, "find yesterday's settlements by sale date", no histórico deste repositório).
+> **Não** conferido: a saída bruta (`smoke.json`, stdout das repetições de controle, medições de
+> 30 e 15 execuções e o Recall@5) não está versionada, e a passagem exige `OPENAI_API_KEY` e
+> Docker. As tabelas são a transcrição do run de 2026-11-17 e das medições citadas; tratá-las
+> como relato, não como artefato reproduzível.
+
 ## Como reproduzir
 
 ```bash

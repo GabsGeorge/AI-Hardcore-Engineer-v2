@@ -28,9 +28,48 @@
       ]
     },
     {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Avaliação online (LLM-as-judge): média 1 h por métrica",
+      "description": "getnet_online_eval_score amostrado com EVAL_SAMPLE_RATE. Linha de alerta em 0,7 (OnlineEvalScoreLow).",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 0.7 }
+            ]
+          },
+          "custom": { "thresholdsStyle": { "mode": "line" } }
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (metric) (rate(getnet_online_eval_score_sum[1h])) / sum by (metric) (rate(getnet_online_eval_score_count[1h]))",
+          "legendFormat": "{{metric}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Turnos avaliados (24 h)",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 4 },
+      "targets": [
+        {
+          "expr": "sum by (metric) (increase(getnet_online_eval_score_count[24h]))",
+          "legendFormat": "{{metric}}"
+        }
+      ]
+    },
+    {
       "id": 3,
       "type": "stat",
-      "title": "Handoffs resolvidos / expirados",
+      "title": "Handoffs abertos por motivo (24 h)",
       "gridPos": { "x": 0, "y": 8, "w": 12, "h": 6 },
       "targets": [
         {
