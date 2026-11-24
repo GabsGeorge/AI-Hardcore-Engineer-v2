@@ -25,8 +25,9 @@ Observabilidade **sem dependência de SaaS**, com três componentes locais:
    `trace_id` carregado no record para cruzar com os spans.
 
 A stack `prometheus + grafana + collector OTLP` fica **inteira no profile `obs`** do
-compose: `docker compose --profile obs up -d`. Sem o profile, a API sobe sozinha e o
-exporter OTLP vira no-op — perfeito para o avaliador que só quer testar o fluxo
+compose: `make up-obs` (`docker compose -f docker-compose.yml -f docker-compose.obs.yml
+--profile obs up -d`; o arquivo extra só aponta a api para o Tempo). Sem o profile, a API sobe
+sozinha e o exporter OTLP vira no-op (`OTEL_EXPORTER_OTLP_ENDPOINT` vazio por padrão) — perfeito para o avaliador que só quer testar o fluxo
 funcional.
 
 ### Por que não Langfuse
@@ -67,8 +68,8 @@ código não acopla.
 ## Como validar
 
 ```bash
-# subir com observabilidade
-docker compose --profile obs up -d
+# subir com observabilidade (métricas + traces no Tempo)
+docker compose -f docker-compose.yml -f docker-compose.obs.yml --profile obs up -d
 
 # ver que o /metrics está sendo scraped
 curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].labels.job'

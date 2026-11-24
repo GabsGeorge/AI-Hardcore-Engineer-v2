@@ -34,8 +34,10 @@ import os
 import secrets
 import selectors
 import shutil
+import subprocess
 import sys
 import threading
+import time
 from collections.abc import Callable, Coroutine
 from pathlib import Path
 from typing import Any
@@ -67,6 +69,22 @@ def ensure_timezones(pg_share: Path) -> bool:
     return True
 
 
+def _get_server(pgserver: Any, data_dir: Path, wait_seconds: float = 180.0) -> Any:
+    """`cleanup_mode="stop"`: o Postgres para junto com o script (Ctrl-C incluso), sem deixar
+    processo órfão. Depois de um encerramento forçado, a recuperação do WAL pode passar do tempo
+    de espera do `pg_ctl` (TimeoutExpired) mesmo com o servidor subindo; nesse caso tentamos de
+    novo até ele aceitar conexões, porque o pgserver reaproveita um servidor já de pé."""
+    deadline = time.monotonic() + wait_seconds
+    while True:
+        try:
+            return pgserver.get_server(data_dir, cleanup_mode="stop")
+        except subprocess.TimeoutExpired:
+            if time.monotonic() > deadline:
+                raise
+            print("run_local: Postgres ainda em recuperação; aguardando...", flush=True)
+            time.sleep(3)
+
+
 def start_postgres(data_dir: Path) -> str:
     """Sobe (ou reaproveita) o Postgres embutido e devolve a URL do banco da app."""
     try:
@@ -80,7 +98,7 @@ def start_postgres(data_dir: Path) -> str:
         print("run_local: banco de fusos horários copiado do pacote tzdata", flush=True)
 
     data_dir.mkdir(parents=True, exist_ok=True)
-    server = pgserver.get_server(data_dir, cleanup_mode=None)
+    server = _get_server(pgserver, data_dir)
     admin_url = server.get_uri()
     with psycopg.connect(admin_url, autocommit=True) as conn:
         if not conn.execute("SELECT 1 FROM pg_database WHERE datname = %s", (DB_NAME,)).fetchone():

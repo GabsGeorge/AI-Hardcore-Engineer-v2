@@ -71,9 +71,9 @@ services:
       # alem do mem_limit e disparava OOM 137. Com SKIP_RERANKER=1 o retriever
       # usa so BM25+densa (RRF) com score 0.85 no fallback.
       SKIP_RERANKER: "${SKIP_RERANKER:-1}"
-      # Spans vão para o Grafana Tempo do profile `obs` (OTLP/HTTP). Defina a variável vazia no
-      # .env para não exportar quando o profile `obs` não estiver de pé.
-      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT-http://tempo:4318}"
+      # Vazio por padrão: sem o profile `obs` não há Tempo, então a api não exporta spans (o
+      # trace_id continua na resposta). docker-compose.obs.yml liga o export para o Tempo.
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
     expose: ["8000"]
     ports:
       # Publicada para scripts/curls e carga (k6, scripts/issue_token.py). O nginx (web) segue

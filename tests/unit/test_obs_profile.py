@@ -73,11 +73,22 @@ def test_online_eval_has_quality_panel_and_drop_alert() -> None:
 
 @pytest.mark.req("REQ-OBS-02")
 def test_obs_profile_ships_tempo_wired_to_api_and_grafana() -> None:
-    """D2: Tempo no profile obs, api exportando para ele e datasource provisionada."""
+    """D2: Tempo no profile obs; a api só exporta para ele com docker-compose.obs.yml.
+
+    Sem o override, o endpoint é vazio por padrão: `docker compose up` (sem obs) não tenta
+    exportar spans para um Tempo que não existe."""
     compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text("utf-8"))
     services = compose["services"]
     assert "obs" in services["tempo"]["profiles"]
-    assert "http://tempo:4318" in services["api"]["environment"]["OTEL_EXPORTER_OTLP_ENDPOINT"]
+    assert services["api"]["environment"]["OTEL_EXPORTER_OTLP_ENDPOINT"] == (
+        "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+    )
+    env_example = (ROOT / ".env.example").read_text("utf-8")
+    assert "\nOTEL_EXPORTER_OTLP_ENDPOINT=\n" in env_example
+    obs = yaml.safe_load((ROOT / "docker-compose.obs.yml").read_text("utf-8"))
+    api = obs["services"]["api"]
+    assert api["environment"]["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://tempo:4318"
+    assert "tempo" in api["depends_on"]
     tempo_cfg = yaml.safe_load((ROOT / "deploy/tempo/tempo.yaml").read_text("utf-8"))
     otlp = tempo_cfg["distributor"]["receivers"]["otlp"]["protocols"]["http"]
     assert otlp["endpoint"].endswith(":4318")

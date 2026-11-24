@@ -88,6 +88,16 @@ jobs:
         # Garante que todas as imagens (api, web, ingest, tests, k6, …) sobem num clone zero.
         # Pega regressões como o node_modules indo pro build context do web (item 1).
         run: docker compose build
+      - name: OTLP vazio sem obs; Tempo só com docker-compose.obs.yml
+        # Interpolação real do compose: sem o override a api não exporta spans.
+        run: |
+          base=$(docker compose config --format json \
+            | jq -r '.services.api.environment.OTEL_EXPORTER_OTLP_ENDPOINT')
+          obs=$(docker compose -f docker-compose.yml -f docker-compose.obs.yml --profile obs \
+            config --format json | jq -r '.services.api.environment.OTEL_EXPORTER_OTLP_ENDPOINT')
+          echo "sem obs: '${base}'  com obs: '${obs}'"
+          test -z "${base}"
+          test "${obs}" = "http://tempo:4318"
 
   web-e2e:
     name: web-e2e (playwright + mailpit, rede isolada)
@@ -118,6 +128,17 @@ jobs:
         run: |
           docker compose -f docker-compose.yml -f docker-compose.test.yml \
             run --rm web-e2e
+      - name: api sem profile obs não tenta exportar spans
+        # A stack acima subiu com `docker compose` sem obs e atendeu o e2e inteiro (spans
+        # criados em todo request). Nenhum aviso do exporter OTLP pode aparecer no log da api.
+        if: always()
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.test.yml logs api > api.log
+          wc -l api.log
+          grep -q '"event": "request"' api.log  # a api atendeu requests (spans foram criados)
+          if grep -Ei 'failed to export|exporting span|transient error|otlp' api.log; then
+            echo "::error::a api tentou exportar spans sem o profile obs"; exit 1
+          fi
 
   # Nota: a11y (axe-core) já roda dentro do web-e2e pelo spec `01-register-login` —
   # não precisa de job separado.

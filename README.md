@@ -27,10 +27,10 @@ docker compose up -d --build         # api, web (nginx servindo dist), mailpit, 
 ```
 
 > O script `scripts/bootstrap_env.sh` e idempotente — so preenche campos vazios. Rode de novo
-> sempre que apagar o `.env`. O perfil `obs` (Prometheus + Tempo + Grafana) e opcional: `docker
-> compose --profile obs up -d` para subir junto; sem o perfil, a stack mínima roda sem exigir
-> `GRAFANA_ADMIN_PASSWORD` (deixe `OTEL_EXPORTER_OTLP_ENDPOINT=` vazio no `.env` para a api não
-> tentar exportar spans para um Tempo que não está de pé).
+> sempre que apagar o `.env`. O perfil `obs` (Prometheus + Tempo + Grafana) e opcional e não
+> exige editar o `.env`: `make up-obs` (ou o comando da seção [Observabilidade](#observabilidade)).
+> Sem o perfil, a stack mínima roda sem exigir `GRAFANA_ADMIN_PASSWORD` e a api não exporta spans
+> (`OTEL_EXPORTER_OTLP_ENDPOINT` vazio por padrão).
 
 - **API**  → `http://localhost:8000` (todos os `curl` de "Como avaliar" apontam aqui).
 - **UI web** → `http://localhost` (nginx na porta 80 servindo o SPA).
@@ -198,10 +198,14 @@ publicada; só o Prometheus da rede do compose lê) cobrem HTTP, rota, tokens, e
 bloqueios de guardrail, handoffs e a avaliação online (`getnet_online_eval_score`).
 
 ```bash
-docker compose --profile obs up -d       # sobe prometheus (9090), tempo e grafana (3000)
+# sobe prometheus (9090), tempo e grafana (3000) e liga o export de spans da api para o Tempo
+docker compose -f docker-compose.yml -f docker-compose.obs.yml --profile obs up -d --build
+# atalho equivalente: make up-obs
 ```
 
-Com o profile `obs`, a api exporta os spans para o Grafana Tempo (`http://tempo:4318`) e o
+O `docker-compose.obs.yml` só define `OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318` na api; não é
+preciso mexer no `.env`. Só com `--profile obs` (sem o arquivo) os painéis de métricas funcionam,
+mas a api não manda spans. Com o arquivo, a api exporta os spans para o Grafana Tempo e o
 `trace_id` da resposta abre a árvore no dashboard **Getnet - Trace**
 (`deploy/grafana/dashboards/trace.json`). Dashboards de métricas: **Operacional** (p95, QPS, rota,
 bloqueios), **Qualidade** (guardrail por tipo, tokens por papel, handoffs por razão, média 1 h do

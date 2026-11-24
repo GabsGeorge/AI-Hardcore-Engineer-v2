@@ -15,9 +15,10 @@ Sem Langfuse e sem SaaS (ADR 0007).
 - **Provider**: `configure_tracing` cria o `TracerProvider` (`service.name=getnet-support-api`)
   no lifespan da api. Spans sempre existem, então toda resposta tem `trace_id`.
 - **Export**: se `OTEL_EXPORTER_OTLP_ENDPOINT` estiver definido, um `BatchSpanProcessor` manda
-  OTLP/HTTP para `<endpoint>/v1/traces`. No compose, a api recebe
-  `OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318` (sobrescrevível pelo `.env`; vazio desliga o
-  export).
+  OTLP/HTTP para `<endpoint>/v1/traces`; vazio, nenhum exportador é registrado
+  (`tests/unit/test_tracing_export.py`). O padrão no `docker-compose.yml` e no `.env.example` é
+  vazio; `docker-compose.obs.yml` (usado por `make up-obs`) define
+  `OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318` na api.
 - **Raiz**: o middleware `trace_requests` em [src/app/main.py](../../src/app/main.py) abre
   `http.request` (kind SERVER) com pai vindo só de um `traceparent` recebido. Atributos:
   `http.request.method`, `url.path`, `http.route`, `http.response.status_code`.
@@ -236,7 +237,7 @@ A máquina desta revisão não tem Docker; os passos abaixo **não foram executa
 têm saída colada. São o caminho para ver o trace no Tempo/Grafana:
 
 ```bash
-docker compose --profile obs up -d --build
+docker compose -f docker-compose.yml -f docker-compose.obs.yml --profile obs up -d --build
 TOKEN=$(docker compose exec -T api python scripts/issue_token.py cliente1988 --role merchant | tail -1)
 curl -s -X POST http://localhost:8000/v1/chat -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
@@ -251,6 +252,5 @@ curl -s 'http://localhost:9090/api/v1/query?query=sum(getnet_http_requests_total
   capturado (passo 5.2) e colado aqui com data e `trace_id`.
 - Tempo guarda traces em `/tmp` do container (efêmero, retenção de 24 h): é uma stack de
   inspeção local, não de retenção.
-- Sem `OTEL_EXPORTER_OTLP_ENDPOINT` vazio no `.env`, a api tenta exportar para `tempo:4318`
-  mesmo sem o profile `obs`; o export falha em segundo plano (logado pelo SDK) sem afetar o
-  request.
+- `--profile obs` sem `-f docker-compose.obs.yml` sobe Tempo e Grafana, mas a api não exporta
+  spans (o endpoint continua vazio); use `make up-obs` ou o comando completo da seção 5.2.
