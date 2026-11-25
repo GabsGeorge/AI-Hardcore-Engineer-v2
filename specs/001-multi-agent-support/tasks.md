@@ -277,12 +277,12 @@ Ao final, os contratos ficam **congelados**.
 
 ### Testes primeiro (devem falhar)
 
-- [x] T099 [P] [US5] Escrever `tests/integration/test_hitl.py::test_escalation_triggers`: um teste por gatilho — 2 tentativas < 0,70, 1 tentativa < 0,40, pedido explícito, tema sensível (contestação, fraude, cancelamento), 3 falhas seguidas, ação com efeito colateral (REQ-HITL-01) — *o gatilho acabou dividido em testes nomeados por caso em `tests/integration/test_hitl.py`: `test_explicit_human_request_pauses_with_a_ticket` (pedido explícito), `test_sensitive_topic_ticket_has_sensitive_reason` (tema sensível), e `test_side_effect_tool_requires_approval` (efeito colateral). Gatilhos por score (2×<0,70 e 1×<0,40) ficam cobertos pelo guardrail de retry em `tests/integration/test_guardrail_retry.py`.*
+- [x] T099 [P] [US5] Escrever `tests/integration/test_hitl.py::test_escalation_triggers`: um teste por gatilho — 2 tentativas < 0,70, 1 tentativa < 0,40, pedido explícito, tema sensível (contestação, fraude, cancelamento), 3 falhas seguidas, ação com efeito colateral (REQ-HITL-01) — *o gatilho acabou dividido em testes nomeados por caso em `tests/integration/test_hitl.py`: `test_explicit_human_request_pauses_with_a_ticket` (pedido explícito), `test_sensitive_topic_ticket_has_sensitive_reason` (tema sensível), e `test_side_effect_tool_requires_approval` (efeito colateral). Gatilhos por score (2×<0,70 e 1×<0,40) ficam cobertos por `tests/integration/test_graph_replan.py` (o arquivo `test_guardrail_retry.py` citado antes nunca existiu — auditoria 2026-11-24).*
 - [X] T100 [P] [US5] Escrever `tests/integration/test_hitl.py::test_escalation_interrupts_and_persists`: resposta `awaiting_human` com `ticket_id`; estado pausado no checkpointer (REQ-HITL-02)
 - [X] T101 [P] [US5] Escrever `tests/integration/test_hitl.py::test_operator_reply_resumes_same_thread` e `::test_resume_uses_ticket_owner_identity`: mesma thread, mensagem final com o texto humano, identidade do dono do ticket (REQ-HITL-03)
 - [X] T102 [P] [US5] Escrever `tests/integration/test_hitl.py::test_side_effect_tool_requires_approval`: `open_dispute` fica `pending`; `approve` executa; `reject` informa o lojista; `action_decision` ausente com ação pendente → 422 (REQ-HITL-04)
 - [x] T103 [P] [US5] Escrever `tests/contract/test_handoffs_api.py`: fila filtrável por status, ordenada por prioridade e criação, com resumo e contexto; responder ticket encerrado → 409 `ticket_closed` (REQ-HITL-06) — *coberto por `tests/contract/test_handoffs_sort.py` (ordenação por prioridade+criação) + `tests/integration/test_handoff_reply_ui.py` (resumo/contexto na fila) + `tests/security/test_handoff_double_resume.py` (409 `ticket_closed`).*
-- [X] T104 [P] [US5] Escrever `tests/security/test_roles.py::test_merchant_cannot_reply_handoff`: rotas de operador com token de lojista → 403 `forbidden_role` (REQ-SEC-06)
+- [X] T104 [P] [US5] Escrever `tests/integration/test_hitl.py::test_merchant_cannot_reply_handoff` (+ `tests/security/test_handoff_rbac.py`; o nome `test_roles.py` do plano não existe — auditoria 2026-11-24): rotas de operador com token de lojista → 403 `forbidden_role` (REQ-SEC-06)
 - [x] T105 [P] [US5] Escrever `tests/contract/test_conversations_api.py`: dono lê histórico e status; após resposta do operador vê `resolved` e a mensagem final em até 5 s; outro usuário → 404 (REQ-API-05) — *coberto por `tests/contract/test_me_conversations.py` (histórico/status pelo dono) + `tests/integration/test_me_conversations_isolation.py` (resolve + mensagem final) + `tests/security/test_conversation_ownership.py` (404 para outro usuário).*
 
 ### Implementação
@@ -337,7 +337,7 @@ Ao final, os contratos ficam **congelados**.
 **Purpose**: Consolidar LLM fake em cenários reutilizáveis e fechar a trilha de auditoria.
 **Responsável**: QA + Segurança
 
-- [X] T126 [P] Criar `tests/integration/scenarios.py`: roteiros de fake LLM para os 10 cenários (PT/EN) e os 8 extras, reutilizados por integração e contrato (SC-001, ADR 0006)
+- [ ] T126 [P] Criar `tests/integration/scenarios.py` *(auditoria 2026-11-24: não existe; os roteiros ficam inline em `tests/integration/test_golden_scenarios.py`, que roda um subconjunto do golden set, não os 10+8 cenários; ver docs/limitations.md)*: roteiros de fake LLM para os 10 cenários (PT/EN) e os 8 extras, reutilizados por integração e contrato (SC-001, ADR 0006)
 - [X] T127 [P] Escrever `tests/integration/test_golden_scenarios.py`: rota, tools e presença de fontes esperadas nos 18 roteiros (REQ-ORC-01, REQ-API-02)
 - [X] T128 [P] Escrever `tests/security/test_audit.py`: eventos `auth_failed`, `forbidden_user_mismatch`, `tool_call`, `escalated`, `operator_reply`, `action_approved` com ator, ação, alvo, `trace_id`, horário e sem PII (REQ-SEC-07)
 - [X] T129 Completar os pontos de auditoria em `src/app/api/auth.py`, `src/app/api/handoffs.py` e `src/app/agents/escalation.py` (REQ-SEC-07)
@@ -364,7 +364,7 @@ Ao final, os contratos ficam **congelados**.
 ### Testes primeiro (devem falhar)
 
 - [X] T134 [P] [US9] Escrever `tests/unit/test_resilience.py`: timeouts (LLM 20 s, web 5 s, tools 2 s), retry com jitter, circuito abre após N falhas e responde degradado sem esperar (REQ-REL-01, REQ-REL-03)
-- [X] T135 [P] [US9] Escrever `tests/integration/test_fallback.py`: modelo principal falhando → resposta pelo fallback (REQ-REL-02)
+- [X] T135 [P] [US9] Escrever `tests/unit/test_fallback.py`: modelo principal falhando → resposta pelo fallback (REQ-REL-02)
 - [X] T136 [P] [US9] Escrever `tests/security/test_rate_limit.py::test_rate_limit_429`: 31ª requisição no minuto → 429 com `Retry-After` (REQ-SEC-08)
 - [X] T137 [P] [US9] Escrever `tests/contract/test_idempotency.py`: mesma chave e corpo → mesma resposta e uma execução; corpo diferente → 409 `idempotency_conflict` (REQ-API-06)
 - [X] T138 [P] [US9] Escrever `tests/integration/test_lgpd.py::test_delete_my_data` e `::test_retention_purge`: exclusão remove conversas, checkpoints e feedback e pseudonimiza auditoria; expurgo respeita 90 d / 30 d / 1 ano (REQ-SEC-09)
@@ -443,7 +443,7 @@ Ao final, os contratos ficam **congelados**.
 - [X] T177 Executar `/security-review` e revisar o threat model contra o código final (`specs/001-multi-agent-support/threat-model.md`) — resultado em `specs/002-web-ui/checklists/block-review.md` (seção "T177"); 4 achados bloqueantes identificados e corrigidos nos itens 1–4 do backlog pós-fechamento (f72784a, d0fd0b0, e600454, d4b4cf2); threat model segue coerente
 - [X] T178 Executar `/ponytail-debt` e registrar os `shortcut:` aceitos na seção de limitações do README — registrado em `docs/limitations.md`, linkado no README
 - [x] T179 Validar `specs/001-multi-agent-support/quickstart.md` do zero num clone limpo (sem `make` e com `make`) — *o smoke de 10 cenários em [docs/reports/smoke.md](../../docs/reports/smoke.md) roda contra uma stack subida pelo quickstart (`scripts/bootstrap_env.sh` + `docker compose up -d`); comandos conferidos. Clone limpo com chave real fica pendente de infra do revisor.*
-- [x] T180 Atualizar `docs/architecture.drawio` com o que mudou durante a implementação — *diagrama em `docs/architecture.drawio` revisado em 2026-10-30 contra o grafo final (`src/app/orchestration/builder.py`); nós e fronteiras batem com o código. Export PNG referenciado no README fica como "não-bloqueante" porque o drawio é editável a partir do fonte; qualquer leitor abre no [draw.io](https://app.diagrams.net).*
+- [x] T180 Atualizar `docs/architecture.drawio` com o que mudou durante a implementação — *diagrama em `docs/architecture.drawio` revisado em 2026-10-30 contra o grafo final (`src/app/graph/builder.py`); nós e fronteiras batem com o código. Export PNG referenciado no README fica como "não-bloqueante" porque o drawio é editável a partir do fonte; qualquer leitor abre no [draw.io](https://app.diagrams.net).*
 
 ---
 

@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.api.auth import CurrentUser
 from app.api.auth import current_user as current_user_dep
+from app.api.auth_limits import check_auth_flow_limit
 from app.auth import csrf as csrf_tokens
 from app.auth import login_rate, one_time_tokens, passwords, repo, sessions
 from app.core.errors import AppError, unauthorized
@@ -128,8 +129,10 @@ async def register(body: RegisterRequest, request: Request) -> GenericPending:
     """Autocadastro só cria lojista; operador/admin saem do convite admin (FR-001).
 
     Reutiliza a mesma resposta para e-mail novo e existente (FR-004); o pedido ``duplicate``
-    ainda vira linha de auditoria para análise forense.
+    ainda vira linha de auditoria para análise forense. Limite por IP e por e-mail antes de
+    qualquer consulta (E2), com a mesma resposta 429 para e-mail novo e existente.
     """
+    await check_auth_flow_limit(request, "register", ip=_client_ip(request), email=body.email)
     pool = get_pool()
     try:
         passwords.check_strength(body.password)
@@ -301,6 +304,8 @@ async def logout(request: Request, response: Response) -> Response:
 
 @router.post("/password/reset-request", status_code=202, response_model=GenericPending)
 async def reset_request(body: ResetRequest, request: Request) -> GenericPending:
+    # Antes de olhar se a conta existe: o 429 não pode revelar cadastro (E2, FR-004).
+    await check_auth_flow_limit(request, "reset_request", ip=_client_ip(request), email=body.email)
     pool = get_pool()
     account = await repo.get_account_by_email(pool, body.email)
     if account is not None and account.status != "deactivated":

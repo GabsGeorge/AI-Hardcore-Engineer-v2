@@ -1,14 +1,16 @@
 /**
- * Minimal SSE client used by the chat screen. Three jobs:
+ * Minimal SSE client used by the chat screen.
  *
- *  1. Dispatch per-event callbacks on the stream of `/v1/chat/stream` or
- *     `/v1/conversations/{id}/events`.
- *  2. Deduplicate: a reconnect that re-receives a `done` whose `trace_id` was already
- *     observed, or a `handoff_*` for the same `ticket_id`, is skipped.
- *  3. Reconnect once with capped backoff after a transient drop; stop on an auth failure.
- *
- * The chat screen asks for a POST stream; EventSource is GET-only. We hand-roll a `fetch`
- * reader to keep the CSRF cookie + body combination.
+ *  - `streamPost` reads the POST stream of `/v1/chat/stream` with `fetch` (EventSource is
+ *    GET-only and we need the CSRF header + JSON body). It never reconnects: a failed turn is
+ *    reported to the caller, which shows the error to the merchant. An HTTP error becomes an
+ *    `SseHttpError` carrying the status and, on 429, the `Retry-After` seconds.
+ *  - `openGetStream` listens to `/v1/conversations/{id}/events` with the browser's EventSource.
+ *    Reconnection is the browser's own: when the connection drops or the server closes the
+ *    channel (it does so every ~60 s by design), EventSource reopens it by itself. Every server
+ *    event carries an `id`, so an event received again after a reopen is skipped. When the
+ *    browser gives up (an HTTP error such as 401, 403, 404 or 429 closes the EventSource for
+ *    good), we do NOT retry: the channel stays closed and `onError` is called once.
  */
 
 export type SseHandlers = {
@@ -17,7 +19,30 @@ export type SseHandlers = {
   onDone?: () => void;
 };
 
-const RECONNECT_CAP_MS = 10_000;
+/** HTTP failure of a stream request; `retryAfterSeconds` comes from the `Retry-After` header. */
+export class SseHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly retryAfterSeconds: number | null,
+  ) {
+    super(`sse_http_${status}`);
+    this.name = "SseHttpError";
+  }
+}
+
+/** `Retry-After` as seconds (delta form only; an HTTP-date or garbage gives null). */
+export function parseRetryAfter(value: string | null): number | null {
+  if (value === null) return null;
+  const seconds = Number(value.trim());
+  return Number.isFinite(seconds) && seconds >= 0 ? Math.ceil(seconds) : null;
+}
+
+export const CONVERSATION_EVENTS = [
+  "handoff_update",
+  "final_message",
+  "sla_breached",
+  "handoff_expired",
+] as const;
 
 function readCsrfCookie(): string | null {
   const match = document.cookie.match(/(?:^|;\s*)csrf=([^;]+)/);
@@ -46,7 +71,10 @@ export async function streamPost(
     signal,
   });
   if (!response.ok) {
-    const err = new Error(`sse_http_${response.status}`);
+    const err = new SseHttpError(
+      response.status,
+      parseRetryAfter(response.headers.get("Retry-After")),
+    );
     handlers.onError?.(err);
     throw err;
   }
@@ -57,25 +85,29 @@ export async function streamPost(
 }
 
 export function openGetStream(path: string, handlers: SseHandlers, signal: AbortSignal): void {
+  if (signal.aborted) {
+    return;
+  }
   const seen = new Set<string>();
   const source = new EventSource(path, { withCredentials: true });
-  let attempts = 0;
 
   const handle = (name: string, event: MessageEvent<string>) => {
-    try {
-      const data = event.data ? (JSON.parse(event.data) as Record<string, unknown>) : {};
-      const dedupKey = `${name}:${String(data["ticket_id"] ?? data["trace_id"] ?? event.lastEventId)}`;
-      if (seen.has(dedupKey)) {
+    if (event.lastEventId) {
+      const key = `${name}:${event.lastEventId}`;
+      if (seen.has(key)) {
         return;
       }
-      seen.add(dedupKey);
+      seen.add(key);
+    }
+    try {
+      const data: unknown = event.data ? JSON.parse(event.data) : {};
       handlers.onEvent?.(name, data);
     } catch (err) {
       handlers.onError?.(err as Error);
     }
   };
 
-  for (const name of ["handoff_update", "final_message", "sla_breached", "handoff_expired"]) {
+  for (const name of CONVERSATION_EVENTS) {
     source.addEventListener(name, (event) => handle(name, event as MessageEvent<string>));
   }
   source.onerror = () => {
@@ -83,16 +115,12 @@ export function openGetStream(path: string, handlers: SseHandlers, signal: Abort
       source.close();
       return;
     }
-    attempts += 1;
-    const wait = Math.min(RECONNECT_CAP_MS, 2 ** attempts * 500);
-    window.setTimeout(() => {
-      if (!signal.aborted) {
-        // EventSource reconnects itself after the error unless we call close(); keep the
-        // backoff behaviour explicit so this stays testable.
-      }
-    }, wait);
+    // CONNECTING: the browser is already reopening the channel; nothing to do.
+    if (source.readyState === EventSource.CLOSED) {
+      handlers.onError?.(new Error("sse_closed"));
+    }
   };
-  signal.addEventListener("abort", () => source.close());
+  signal.addEventListener("abort", () => source.close(), { once: true });
 }
 
 // SSE allows events separated by LF-LF or CRLF-CRLF (mixed is also legal per the HTML spec).

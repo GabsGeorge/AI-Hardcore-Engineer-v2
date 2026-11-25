@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     rag_relevance_threshold: float = Field(0.30, ge=0, le=1)
 
     rate_limit_per_min: int = Field(30, ge=1)
+    # Cadastro e pedido de recuperação de senha: por IP e por e-mail, janela de 1 h (E2).
+    auth_flow_limit_per_hour: int = Field(5, ge=1)
     handoff_sla_minutes: int = Field(15, ge=1)
     handoff_expiry_hours: int = Field(24, ge=1)
 

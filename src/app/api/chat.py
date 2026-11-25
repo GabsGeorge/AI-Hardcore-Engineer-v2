@@ -4,6 +4,7 @@ state, so raw PII is never persisted in checkpoints (constitution X)."""
 
 import json
 from typing import Any, get_args
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request
@@ -23,6 +24,16 @@ from app.ops.online_eval import schedule_score_turn
 router = APIRouter()
 
 _ROUTE_NODES = set(get_args(RouteNode))
+
+
+def is_http_url(url: str) -> bool:
+    """True só para URL absoluta http/https com host: o resto (javascript:, data:, vbscript:,
+    relativa) não pode virar link para o lojista."""
+    try:
+        parts = urlsplit(url.strip())
+    except ValueError:
+        return False
+    return parts.scheme.lower() in ("http", "https") and bool(parts.netloc)
 
 
 def graph_config(
@@ -75,7 +86,10 @@ def build_response(state: dict[str, Any], conversation_id: UUID, trace_id: str) 
     # no longer built on the consulted pages; listing them under it reads as if it were.
     for r in [] if output_flag in ("blocked", "rewritten") else ok:
         for src in r.get("sources", []):
-            sources.setdefault(src["url"], src)
+            # Só http/https chega ao navegador: uma página ou resultado web com `javascript:`
+            # ou `data:` viraria um link clicável na lista de fontes (A3, LLM05).
+            if is_http_url(src.get("url", "")):
+                sources.setdefault(src["url"], src)
     return ChatResponse(
         response=state.get("final_response") or "",
         conversation_id=conversation_id,

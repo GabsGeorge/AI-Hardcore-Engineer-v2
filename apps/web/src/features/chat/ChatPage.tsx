@@ -7,6 +7,15 @@ import { streamPost } from "@/lib/sse";
 import { HandoffBanner } from "./HandoffBanner";
 import { MessageList } from "./MessageList";
 import type { ChatMessage, ChatResponseBody, HandoffRef } from "./types";
+import { useConversationEvents } from "./useConversationEvents";
+
+/** Espera padrão quando o 429 vem sem `Retry-After` utilizável. */
+const DEFAULT_RETRY_SECONDS = 60;
+
+function retryAfterSeconds(err: unknown): number {
+  const value = (err as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds;
+  return typeof value === "number" && value > 0 ? value : DEFAULT_RETRY_SECONDS;
+}
 
 type ConversationLoad = {
   conversation_id: string;
@@ -26,7 +35,38 @@ export function ChatPage() {
   const [handoff, setHandoff] = useState<HandoffRef>({ status: "none", ticket_id: null });
   const [conversationId, setConversationId] = useState<string | undefined>(params.id);
   const [retryAt, setRetryAt] = useState<number | undefined>(undefined);
+  const [retrySeconds, setRetrySeconds] = useState(DEFAULT_RETRY_SECONDS);
+  const [slaBreached, setSlaBreached] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Resposta do atendente em tempo real (FR-010, T065): enquanto o handoff espera um humano, o
+  // canal de eventos traz a resposta, a mudança de status, o SLA estourado e a expiração.
+  useConversationEvents(conversationId, handoff.status, {
+    onFinalMessage: (content) => {
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `f-${Date.now()}`,
+          role: "assistant",
+          content,
+          agentSteps: [],
+          sources: [],
+          traceId: "",
+        },
+      ]);
+      announce(content);
+      setHandoff((current) => ({ ...current, status: "resolved" }));
+      setSlaBreached(false);
+    },
+    onHandoffUpdate: (next) => {
+      setHandoff((current) => ({ ...next, ticket_id: next.ticket_id ?? current.ticket_id }));
+    },
+    onSlaBreached: () => setSlaBreached(true),
+    onExpired: (ticketId) => {
+      setHandoff((current) => ({ status: "expired", ticket_id: ticketId ?? current.ticket_id }));
+      setSlaBreached(false);
+    },
+  });
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   // Rola para o fim sempre que msg nova chega ou passos do agente aparecem.
@@ -38,6 +78,7 @@ export function ChatPage() {
   // Hidrata a conversa ao abrir pela URL /chat/:id. Resolve o P0 "conversa abre vazia"
   // do e2e-register-flow (T020). Troca de id (nav entre conversas) tambem rehidrata.
   useEffect(() => {
+    setSlaBreached(false);
     if (!params.id) {
       setMessages([]);
       setHandoff({ status: "none", ticket_id: null });
@@ -164,8 +205,11 @@ export function ChatPage() {
           return;
         }
         if (err instanceof Error && err.message === "sse_http_429") {
-          setRetryAt(Date.now() + 60_000);
-          window.setTimeout(() => setRetryAt(undefined), 60_000);
+          // Espera o que o servidor mandou em Retry-After; 60 s só quando o header falta.
+          const seconds = retryAfterSeconds(err);
+          setRetrySeconds(seconds);
+          setRetryAt(Date.now() + seconds * 1000);
+          window.setTimeout(() => setRetryAt(undefined), seconds * 1000);
           return;
         }
         showError(completed ? "chat.errors.interrupted" : "chat.errors.generic");
@@ -188,7 +232,7 @@ export function ChatPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <HandoffBanner handoff={handoff} slaBreached={false} />
+      <HandoffBanner handoff={handoff} slaBreached={slaBreached} />
       <MessageList messages={messages} pending={pending} liveSteps={liveSteps} />
       <form
         onSubmit={onSubmit}
@@ -214,7 +258,7 @@ export function ChatPage() {
       </form>
       {retryAt !== undefined ? (
         <p className="text-label text-state-warning" role="status">
-          {t("chat.rateLimited")}
+          {t("chat.rateLimited", { seconds: retrySeconds })}
         </p>
       ) : null}
       {handoffLocked ? (

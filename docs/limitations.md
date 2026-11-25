@@ -1,6 +1,6 @@
 # Limitações aceitas (`shortcut:`) e trade-offs (T178)
 
-Nesta entrega, três decisões conscientes trocam robustez máxima por simplicidade/custo.
+Decisões conscientes que trocam robustez máxima por simplicidade/custo, e o que ficou de fora.
 Cada item lista **onde**, **o que** e **o caminho de evolução**.
 
 ---
@@ -61,6 +61,44 @@ a quebrar a CI. A lista é curta por desenho.
 - **Evidência de monitoramento**: a CI roda `trivy fs` em cada PR; qualquer CVE nova HIGH ou
   CRITICAL que não esteja aqui quebra o pipeline.
 
+## 5. Classificador de entrada fail-open
+
+- **Onde**: `src/app/guardrails/input.py::_classify`.
+- **O que**: o classificador LLM (`input_guard`) é a terceira barreira do guardrail de entrada.
+  Se o LLM falha (timeout, erro da API, saída inválida), `_classify` devolve `None` e a pergunta
+  **segue** como `pass`: a heurística (segunda barreira) já rodou, mas nada mais bloqueia.
+- **Por que é aceitável aqui**: a defesa que importa não depende do classificador.
+  (1) A identidade vem só do token (ADR 0005), então nenhuma frase troca o cliente consultado;
+  (2) cada agente só chama as tools da sua allowlist, que leem o cliente de `config`, nunca do
+  texto; (3) ações com efeito colateral exigem aprovação do operador; (4) o guardrail de saída
+  re-mascara PII, reescreve promessas financeiras e barra respostas sem base (grounding). Com o
+  LLM fora, um ataque de prompt injection que escape da heurística chega ao supervisor, mas não
+  ganha acesso a dados de outro cliente nem executa ação.
+- **Caminho fail-closed**: quando `_classify` devolver `None`, marcar `input:blocked` (ou
+  `degraded_response` com "tente de novo") e contar em `getnet_guardrail_blocks_total{kind="classifier_unavailable"}`;
+  ligar por variável (`INPUT_GUARD_FAIL_CLOSED=1`) para não derrubar o atendimento quando o
+  provedor do LLM oscila. Custo: indisponibilidade do LLM vira indisponibilidade do chat.
+
+## 6. Canais SSE sem reconexão manual
+
+- **Onde**: `apps/web/src/lib/sse.ts`.
+- **O que**: o POST do chat (`/v1/chat/stream`) não reconecta: se o fluxo cai, a tela avisa
+  "resposta interrompida" e o lojista reenvia; não há desduplicação por `trace_id` entre
+  tentativas (T056 desmarcada). O canal de eventos da conversa usa a reconexão nativa do
+  `EventSource`; quando o navegador desiste (HTTP 401/403/404/429), o canal fica fechado até o
+  lojista recarregar a conversa.
+- **Evolução**: retomar o POST por `trace_id` exigiria guardar o resultado do turno no servidor
+  (o `Idempotency-Key` já faz isso para `/v1/chat`).
+
+## 7. Testes planejados que não existem
+
+A auditoria de 2026-11-24 desmarcou em `specs/*/tasks.md` as tasks cujo teste não existe:
+contrato de `/v1/auth/*` por schemathesis (T036), verificação de e-mail com token usado/expirado
+(T038), listagem de sessões (T039, parcial), "o mesmo link de reset não serve de novo" (T040,
+parcial), métricas/spans de auth (T035), E2E de privacidade (T080), chat E2E com login e api
+reais fora do HITL (T054, parcial) e o arquivo de roteiros dos 10+8 cenários (T126). O
+comportamento existe no código; falta o teste que o prove.
+
 ---
 
 ## O que NÃO é shortcut
@@ -71,5 +109,6 @@ a quebrar a CI. A lista é curta por desenho.
   dedicado em `tests/security/test_pii.py`.
 - **HITL**: `interrupt()` + `Command(resume=...)` **na mesma thread** e com a identidade do
   dono do ticket. Ver [ADR 0004](adr/0004-hitl-interrupt.md).
-- **Retrieval híbrido**: BM25 + densa + RRF + rerank são obrigatórios no caminho principal
-  (não há "shortcut" aqui). Ver [ADR 0003](adr/0003-busca-hibrida.md).
+- **Retrieval**: o padrão é a busca densa (`RAG_STRATEGY=dense`, limiar 0,40) sem reranker
+  (`SKIP_RERANKER=1` no compose); o pipeline híbrido BM25 + densa + RRF + rerank existe e é
+  testado, mas é opcional (`RAG_STRATEGY=hybrid_rerank`). Ver [ADR 0003](adr/0003-busca-hibrida.md).

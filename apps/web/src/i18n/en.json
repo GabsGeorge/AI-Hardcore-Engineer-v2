@@ -45,7 +45,7 @@
     "send": "Send",
     "thinking": "Thinking…",
     "sources": "Sources",
-    "rateLimited": "Too many messages within a minute. Wait a moment before sending again.",
+    "rateLimited": "Too many messages in a short time. Wait {{seconds}} s before sending again.",
     "errors": {
       "interrupted": "The answer was interrupted before it finished. Please send your question again.",
       "generic": "I could not answer right now. Please try again in a moment."

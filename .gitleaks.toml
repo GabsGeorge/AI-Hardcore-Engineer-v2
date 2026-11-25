@@ -20,4 +20,7 @@ paths = [
     '''^tests/security/test_admin_audit_no_pii\.py$''',
     '''^tests/security/test_csrf_middleware\.py$''',
     '''^apps/web/e2e/06-admin\.spec\.ts$''',
+    # Contas de teste do E2E de HITL (só existem no docker-compose.test.yml).
+    '''^tests/e2e_server\.py$''',
+    '''^apps/web/e2e/07-hitl-realtime\.spec\.ts$''',
 ]

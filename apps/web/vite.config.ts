@@ -6,5 +6,6 @@ export default defineConfig({
   plugins: [react()],
   resolve: { alias: { "@": path.resolve(__dirname, "./src") } },
   server: { host: "0.0.0.0", port: 5173, strictPort: true },
-  build: { outDir: "dist", sourcemap: true, target: "es2022" },
+  // Sem sourcemap em produção: os .map exporiam o código-fonte da SPA (C4).
+  build: { outDir: "dist", sourcemap: false, target: "es2022" },
 });
