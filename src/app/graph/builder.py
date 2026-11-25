@@ -22,24 +22,28 @@ from app.graph.supervisor import supervisor
 from app.graph.synthesize import degraded_response, safe_response, synthesize
 from app.guardrails.input import input_guardrail, route_after_input
 from app.guardrails.output import output_guardrail
+from app.observability.tracing import traced_node
 
 
 def build_graph(checkpointer: BaseCheckpointSaver[Any]) -> Any:
+    # Every node runs inside a span named after it (REQ-OBS-02): the trace of a turn shows the
+    # nodes as children of http.request, with each node's LLM, tool and retrieval spans below.
+    t = traced_node
     g = StateGraph(AgentState)
-    g.add_node("input_guardrail", input_guardrail)
-    g.add_node("summarize", summarize)
+    g.add_node("input_guardrail", t("input_guardrail", input_guardrail))
+    g.add_node("summarize", t("summarize", summarize))
     g.add_node(
         "supervisor",
-        supervisor,
+        t("supervisor", supervisor),
         destinations=("knowledge", "support", "escalation", "synthesize", "degraded_response"),
     )
-    g.add_node("knowledge", knowledge_node, input_schema=SpecialistInput)
-    g.add_node("support", support_node, input_schema=SpecialistInput)
-    g.add_node("escalation", escalation_node)
-    g.add_node("synthesize", synthesize)
-    g.add_node("degraded_response", degraded_response)
-    g.add_node("safe_response", safe_response)
-    g.add_node("output_guardrail", output_guardrail)
+    g.add_node("knowledge", t("knowledge", knowledge_node), input_schema=SpecialistInput)
+    g.add_node("support", t("support", support_node), input_schema=SpecialistInput)
+    g.add_node("escalation", t("escalation", escalation_node))
+    g.add_node("synthesize", t("synthesize", synthesize))
+    g.add_node("degraded_response", t("degraded_response", degraded_response))
+    g.add_node("safe_response", t("safe_response", safe_response))
+    g.add_node("output_guardrail", t("output_guardrail", output_guardrail))
 
     g.add_edge(START, "input_guardrail")
     g.add_conditional_edges(

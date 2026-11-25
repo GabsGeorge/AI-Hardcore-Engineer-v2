@@ -48,7 +48,7 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "p50/p95 latência SSE (/v1/chat)",
+      "title": "p50/p95 latência /v1/chat (não inclui /v1/chat/stream)",
       "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "targets": [
         {

@@ -33,9 +33,9 @@ Gerado por `scripts/check_traceability.py` (REQ-INF-04).
 | REQ-MEM-02 | T123, T125 | tests/integration/test_memory.py | ✅ |
 | REQ-MEM-03 | T122, T125 | tests/integration/test_memory.py | ✅ |
 | REQ-OBS-01 | T011, T025, T026, T032 | tests/unit/test_logging.py | ✅ |
-| REQ-OBS-02 | T145, T150, T154 | tests/integration/test_tracing.py, tests/unit/test_prompt_version.py | ✅ |
+| REQ-OBS-02 | T145, T150, T154 | tests/integration/test_tracing.py, tests/integration/test_tracing_tree.py, tests/unit/test_obs_profile.py, tests/unit/test_prompt_version.py | ✅ |
 | REQ-OBS-03 | T146, T151, T152, T153 | tests/integration/test_metrics.py, tests/unit/test_obs_profile.py | ✅ |
-| REQ-OBS-04 | T147, T155 | tests/unit/test_online_eval.py | ✅ |
+| REQ-OBS-04 | T147, T155 | tests/unit/test_obs_profile.py, tests/unit/test_online_eval.py | ✅ |
 | REQ-OBS-05 | T148, T156 | tests/contract/test_feedback.py | ✅ |
 | REQ-OBS-06 | T157, T158, T168 | tests/integration/test_golden_scenarios.py, tests/unit/test_eval_checks.py | ✅ |
 | REQ-ORC-01 | T039, T041, T051, T127, T158 | tests/integration/test_golden_scenarios.py, tests/integration/test_graph_topology.py, tests/unit/test_supervisor_plan.py, tests/unit/test_supervisor_prompt_routing.py | ✅ |

@@ -20,9 +20,18 @@ def set_overrides(
 
 
 def get_model(role: str) -> Any:
-    """Chat model for a graph role; chained to OPENAI_MODEL_FALLBACK when set (REQ-REL-02)."""
+    """Chat model for a graph role, wrapped so every call opens an ``llm.<role>`` span with model,
+    tokens, latency and prompt version (REQ-OBS-02). Fakes installed by tests are wrapped too."""
+    from app.observability.tracing import TracedModel
+
+    s = get_settings()
     if _model_factory is not None:
-        return _model_factory(role)
+        return TracedModel(_model_factory(role), role, s.openai_model_primary or "test-double")
+    return TracedModel(_real_model(), role, s.openai_model_primary)
+
+
+def _real_model() -> Any:
+    """Primary chat model, chained to OPENAI_MODEL_FALLBACK when set (REQ-REL-02)."""
     s = get_settings()
     primary = ChatOpenAI(
         model=s.openai_model_primary,

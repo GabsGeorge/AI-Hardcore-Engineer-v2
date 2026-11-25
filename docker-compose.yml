@@ -71,6 +71,9 @@ services:
       # alem do mem_limit e disparava OOM 137. Com SKIP_RERANKER=1 o retriever
       # usa so BM25+densa (RRF) com score 0.85 no fallback.
       SKIP_RERANKER: "${SKIP_RERANKER:-1}"
+      # Vazio por padrão: sem o profile `obs` não há Tempo, então a api não exporta spans (o
+      # trace_id continua na resposta). docker-compose.obs.yml liga o export para o Tempo.
+      OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
     expose: ["8000"]
     ports:
       # Publicada para scripts/curls e carga (k6, scripts/issue_token.py). O nginx (web) segue
@@ -120,7 +123,19 @@ services:
     mem_limit: 96m
     cpus: 0.5
 
-  # --- Perfil `obs`: observabilidade (prometheus, grafana) -------------------------------
+  # --- Perfil `obs`: observabilidade (prometheus, tempo, grafana) -------------------------
+  tempo:
+    profiles: ["obs"]
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    volumes:
+      - ./deploy/tempo/tempo.yaml:/etc/tempo/tempo.yaml:ro
+    # OTLP/HTTP 4318 só na rede interna (a api exporta para http://tempo:4318); 3200 é a API
+    # de consulta usada pelo datasource do Grafana.
+    expose: ["4318", "3200"]
+    mem_limit: 256m
+    cpus: 0.5
+
   prometheus:
     profiles: ["obs"]
     image: prom/prometheus:v2.55.1
@@ -166,6 +181,7 @@ services:
       - "3000:3000"
     depends_on:
       prometheus: { condition: service_started }
+      tempo: { condition: service_started }
 
   # --- Perfil `load`: carga sintética com k6 -----------------------------------------------
   k6:

@@ -1,0 +1,13 @@
+# Observabilidade completa sem editar o .env:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.obs.yml --profile obs up -d --build
+#   (ou: make up-obs)
+#
+# Este arquivo só liga o export de spans da api para o Grafana Tempo do profile `obs`. Os
+# serviços prometheus, tempo e grafana continuam definidos no docker-compose.yml, no profile `obs`.
+services:
+  api:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    depends_on:
+      tempo: { condition: service_started }

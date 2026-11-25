@@ -46,6 +46,8 @@ dev = [
     "types-pyyaml>=6.0",
 ]
 eval = ["ragas>=0.2"]
+# Modo local sem Docker (scripts/run_local.py): Postgres+pgvector embutido e Redis em processo.
+local = ["pgserver>=0.1.4", "fakeredis[lua]>=2.26", "tzdata>=2024.1"]
 
 [tool.uv]
 package = false

@@ -53,10 +53,10 @@ def test_failed_warmup_removes_a_partial_model_dir(
     (model_dir / "half-extracted.onnx").write_bytes(b"x")
     monkeypatch.setattr(retriever, "_flashrank_dir", lambda: tmp_path / "flashrank")
 
-    def broken(**_: Any) -> Any:
+    def broken() -> Any:
         raise OSError("corrupted model")
 
-    monkeypatch.setattr(retriever, "Ranker", broken)
+    monkeypatch.setattr(retriever, "_load_ranker", broken)
     with pytest.raises(OSError):
         retriever.warm_reranker()
     assert not model_dir.exists()
@@ -72,7 +72,7 @@ def test_warmup_loads_the_model_once(monkeypatch: pytest.MonkeyPatch, tmp_path: 
         def rerank(self, request: Any) -> list[dict[str, Any]]:
             return [{"id": 0, "score": 0.9}]
 
-    monkeypatch.setattr(retriever, "Ranker", FakeRanker)
+    monkeypatch.setattr(retriever, "_load_ranker", lambda: FakeRanker(model_name="fake"))
     monkeypatch.setattr(retriever, "_flashrank_dir", lambda: tmp_path / "flashrank")
     monkeypatch.setattr(retriever, "_reranker", None)
     retriever.warm_reranker()

@@ -6,11 +6,13 @@ from collections.abc import Awaitable, Callable, Iterable
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
+from opentelemetry.trace import Status, StatusCode
 
 from app.db import repo
 from app.db.pool import get_pool
 from app.graph.state import AgentName, AgentResult, Source, SubTask, ToolCallRecord
 from app.observability.metrics import TOOL_ERRORS
+from app.observability.tracing import span
 from app.tools.interfaces import ALLOWLIST, TIMEOUT_SECONDS, TOOL_INPUTS
 
 ToolImpl = Callable[[Any, RunnableConfig], Awaitable[Any]]
@@ -35,7 +37,19 @@ async def call_tool(
     """Runs a tool for an agent. Outside the allowlist → `denied` and audited, never executed
     (REQ-ORC-05). An unknown name inside the allowlist is `error`, not `denied`: the agent is
     allowed to call it, we just do not have an implementation. Arguments are validated against
-    the frozen interface before running."""
+    the frozen interface before running. Each call is a ``tool.<name>`` span (REQ-OBS-02)."""
+    with span(f"tool.{name}", **{"tool.name": name, "tool.agent": agent}) as current:
+        output, record = await _run_tool(agent, name, impl, raw_args, config)
+        current.set_attribute("tool.status", record["status"])
+        current.set_attribute("tool.latency_ms", record["latency_ms"])
+        if record["status"] != "ok":
+            current.set_status(Status(StatusCode.ERROR, record["status"]))
+        return output, record
+
+
+async def _run_tool(
+    agent: str, name: str, impl: ToolImpl | None, raw_args: dict[str, Any], config: RunnableConfig
+) -> tuple[Any | None, ToolCallRecord]:
     if name not in ALLOWLIST.get(agent, set()):
         await _audit(config, "tool_denied", name, "denied")
         return None, {"name": name, "status": "denied", "latency_ms": 0}

@@ -31,6 +31,21 @@ groups:
           summary: "Pico de bloqueios de guardrail"
           description: "Pode indicar campanha de injeção ou regressão de prompt."
 
+      - alert: OnlineEvalScoreLow
+        # Média de 1 h do juiz online (faithfulness / relevance) abaixo de 0,7. O `and` exige
+        # ao menos 5 turnos avaliados na janela, para uma amostra pequena não disparar sozinha.
+        expr: |
+          (
+            sum by (metric) (rate(getnet_online_eval_score_sum[1h]))
+            / sum by (metric) (rate(getnet_online_eval_score_count[1h]))
+          ) < 0.7
+          and sum by (metric) (increase(getnet_online_eval_score_count[1h])) >= 5
+        for: 15m
+        labels: { severity: warn }
+        annotations:
+          summary: "Qualidade observada caiu: {{ $labels.metric }} médio < 0,7 em 1 h"
+          description: "Juiz online (getnet_online_eval_score) abaixo do limiar. Comparar prompt.version nos spans llm.* e rodar o golden set."
+
       - alert: HandoffsQueueGrowing
         expr: increase(getnet_handoffs_total[15m]) > 5
         for: 15m

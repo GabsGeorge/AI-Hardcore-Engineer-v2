@@ -24,11 +24,11 @@ from typing import Any, Protocol
 
 import bm25s
 from bm25s.stopwords import STOPWORDS_EN, STOPWORDS_PORTUGUESE
-from flashrank import Ranker, RerankRequest
 
 from app.core.config import get_settings
 from app.core.llm import get_embeddings
 from app.db.pool import Pool, get_pool
+from app.observability.tracing import span
 from app.rag.chunking import passage
 from app.tools.interfaces import KnowledgeHit
 
@@ -134,16 +134,23 @@ async def bm25_index(pool: Pool) -> Bm25Index | None:
 async def dense_hits(
     pool: Pool, query: str, k: int, lang: str | None = None
 ) -> list[tuple[int, float]]:
-    """(chunk id, cosine similarity), most similar first."""
-    vector = await get_embeddings().aembed_query(query)
-    async with pool.connection() as conn:
-        cur = await conn.execute(
-            "SELECT id, 1 - (embedding <=> %(vector)s::vector) AS score FROM chunks"
-            " WHERE (%(lang)s::text IS NULL OR lang = %(lang)s)"
-            " ORDER BY embedding <=> %(vector)s::vector LIMIT %(k)s",
-            {"lang": lang, "vector": str([float(x) for x in vector]), "k": k},
-        )
-        return [(r["id"], float(r["score"])) for r in await cur.fetchall()]
+    """(chunk id, cosine similarity), most similar first. Spans: ``retrieval.dense`` with
+    ``retrieval.embedding`` (the query embedding call) inside it."""
+    with span("retrieval.dense", **{"retrieval.k": k, "retrieval.lang": lang}) as dense:
+        with span(
+            "retrieval.embedding", **{"gen_ai.request.model": get_settings().openai_embedding_model}
+        ):
+            vector = await get_embeddings().aembed_query(query)
+        async with pool.connection() as conn:
+            cur = await conn.execute(
+                "SELECT id, 1 - (embedding <=> %(vector)s::vector) AS score FROM chunks"
+                " WHERE (%(lang)s::text IS NULL OR lang = %(lang)s)"
+                " ORDER BY embedding <=> %(vector)s::vector LIMIT %(k)s",
+                {"lang": lang, "vector": str([float(x) for x in vector]), "k": k},
+            )
+            hits = [(r["id"], float(r["score"])) for r in await cur.fetchall()]
+        dense.set_attribute("retrieval.hits", len(hits))
+        return hits
 
 
 async def dense_search(pool: Pool, query: str, k: int, lang: str | None = None) -> list[int]:
@@ -170,6 +177,15 @@ def _flashrank_dir() -> Path:
     return cache.parent / "flashrank"
 
 
+def _load_ranker() -> Any:
+    """Imports FlashRank only when the reranker is really used: `onnxruntime` needs the MSVC
+    runtime on Windows, and with SKIP_RERANKER=1 (or RAG_STRATEGY=dense) the API must start
+    without it."""
+    from flashrank import Ranker
+
+    return Ranker(model_name=RERANK_MODEL, cache_dir=str(_flashrank_dir()))
+
+
 class FlashRankReranker:
     """Multilingual cross-encoder (~150 MB, CPU). Download runs ONCE in `warm_reranker` (job or
     lifespan): a search that arrives before the model is ready fails fast instead of parking a
@@ -184,9 +200,11 @@ class FlashRankReranker:
             if not self._lock.acquire(blocking=False):
                 raise RuntimeError("reranker is warming up; try again shortly")
             try:
-                self._ranker = Ranker(model_name=RERANK_MODEL, cache_dir=str(_flashrank_dir()))
+                self._ranker = _load_ranker()
             finally:
                 self._lock.release()
+        from flashrank import RerankRequest
+
         request = RerankRequest(
             query=query, passages=[{"id": i, "text": p} for i, p in enumerate(passages)]
         )
@@ -229,7 +247,7 @@ def warm_reranker() -> None:
     global _reranker
     reranker = _reranker if isinstance(_reranker, FlashRankReranker) else FlashRankReranker()
     try:
-        reranker._ranker = Ranker(model_name=RERANK_MODEL, cache_dir=str(_flashrank_dir()))
+        reranker._ranker = _load_ranker()
     except Exception:
         model_dir = _flashrank_dir() / RERANK_MODEL
         if model_dir.exists():
@@ -304,11 +322,26 @@ async def _search_dense(pool: Pool, query: str, lang: str | None) -> list[KbHit]
 
 
 async def search(query: str, lang: str | None = None) -> list[KbHit]:
+    """One ``retrieval.search`` span per query (REQ-OBS-02), with the strategy and hit count."""
+    strategy = get_settings().rag_strategy
+    with span(
+        "retrieval.search", **{"retrieval.strategy": strategy, "retrieval.lang": lang}
+    ) as current:
+        hits = await _search(query, lang, strategy)
+        current.set_attribute("retrieval.hits", len(hits))
+        if hits:
+            current.set_attribute("retrieval.top_score", round(hits[0].score, 4))
+        return hits
+
+
+async def _search(query: str, lang: str | None, strategy: str) -> list[KbHit]:
     pool = get_pool()
-    if get_settings().rag_strategy == "dense":
+    if strategy == "dense":
         return await _search_dense(pool, query, lang)
-    index = await bm25_index(pool)
-    lexical = index.search(query, CANDIDATES, lang) if index else []
+    with span("retrieval.bm25", **{"retrieval.k": CANDIDATES}) as bm25:
+        index = await bm25_index(pool)
+        lexical = index.search(query, CANDIDATES, lang) if index else []
+        bm25.set_attribute("retrieval.hits", len(lexical))
     dense = await dense_search(pool, query, CANDIDATES, lang)
     fused = [doc for doc, _ in rrf([lexical, dense])][:RERANK_POOL]
     if not fused:
@@ -325,14 +358,24 @@ async def search(query: str, lang: str | None = None) -> list[KbHit]:
     # ordem RRF com score 0.6 (abaixo do confidence_replan, para o supervisor decidir
     # replan/escalate em vez de sintetizar resposta sem sinal real).
     try:
-        scored = await asyncio.wait_for(
-            asyncio.to_thread(
-                get_reranker().rerank,
-                query,
-                [passage(r["title"], r["section"], r["content"]) for r in rows],
-            ),
-            timeout=4.0,
-        )
+        with span(
+            "retrieval.rerank", **{"rerank.model": RERANK_MODEL, "rerank.candidates": len(rows)}
+        ) as rerank:
+            try:
+                scored = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        get_reranker().rerank,
+                        query,
+                        [passage(r["title"], r["section"], r["content"]) for r in rows],
+                    ),
+                    timeout=4.0,
+                )
+            except Exception as exc:
+                # Degradation, not a failure of the turn: the span says which path was taken.
+                rerank.set_attribute("rerank.outcome", "fallback_rrf")
+                rerank.set_attribute("rerank.error", type(exc).__name__)
+                raise
+            rerank.set_attribute("rerank.outcome", "ok")
         threshold = get_settings().rag_relevance_threshold
         hits = [
             KbHit(

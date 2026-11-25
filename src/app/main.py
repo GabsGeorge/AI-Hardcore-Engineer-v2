@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI, Request, Response
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from opentelemetry.propagate import extract
+from opentelemetry.trace import SpanKind
 from prometheus_client import start_http_server
 from redis.asyncio import Redis
 
@@ -81,7 +83,14 @@ def create_app() -> FastAPI:
     async def trace_requests(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
-        with get_tracer().start_as_current_span("http.request"):
+        # The parent comes only from an incoming W3C `traceparent`; without one the request is a
+        # new root, never a child of whatever span happens to be current in the server process.
+        with get_tracer().start_as_current_span(
+            "http.request",
+            context=extract(dict(request.headers)),
+            kind=SpanKind.SERVER,
+            attributes={"http.request.method": request.method, "url.path": request.url.path},
+        ) as root_span:
             trace_id = current_trace_id()
             request.state.trace_id = trace_id
             structlog.contextvars.bind_contextvars(trace_id=trace_id)
@@ -95,6 +104,8 @@ def create_app() -> FastAPI:
                 route = request.scope.get("route")
                 path = getattr(route, "path", request.url.path)
                 elapsed = time.perf_counter() - started
+                root_span.set_attribute("http.route", path)
+                root_span.set_attribute("http.response.status_code", status)
                 HTTP_REQUESTS.labels(path, request.method, str(status)).inc()
                 HTTP_LATENCY.labels(path).observe(elapsed)
                 get_logger().info(

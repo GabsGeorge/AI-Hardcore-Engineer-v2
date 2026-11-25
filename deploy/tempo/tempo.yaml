@@ -1,0 +1,26 @@
+# Grafana Tempo, modo monolítico, para o profile `obs` (REQ-OBS-02).
+# Recebe OTLP/HTTP da api em :4318 e serve a API de consulta em :3200 para o Grafana.
+# Armazenamento local em /tmp (efêmero): é uma stack de inspeção local, não de retenção.
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4318
+
+compactor:
+  compaction:
+    block_retention: 24h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /tmp/tempo/wal
+    local:
+      path: /tmp/tempo/blocks

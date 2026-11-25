@@ -58,11 +58,58 @@ def test_grafana_dashboards_only_reference_exposed_metrics() -> None:
             )
 
 
+@pytest.mark.req("REQ-OBS-04")
+def test_online_eval_has_quality_panel_and_drop_alert() -> None:
+    """D3: a qualidade observada aparece no dashboard quality e tem alerta de queda."""
+    quality = json.loads((ROOT / "deploy/grafana/dashboards/quality.json").read_text("utf-8"))
+    exprs = [t["expr"] for p in quality["panels"] for t in p.get("targets", [])]
+    assert any("getnet_online_eval_score_sum" in e and "[1h]" in e for e in exprs)
+    alerts = yaml.safe_load((ROOT / "deploy/prometheus/alerts.yml").read_text("utf-8"))
+    rules = {r["alert"]: r for g in alerts["groups"] for r in g["rules"]}
+    rule = rules["OnlineEvalScoreLow"]
+    assert "getnet_online_eval_score_count[1h]" in rule["expr"]
+    assert "< 0.7" in rule["expr"]
+
+
+@pytest.mark.req("REQ-OBS-02")
+def test_obs_profile_ships_tempo_wired_to_api_and_grafana() -> None:
+    """D2: Tempo no profile obs; a api só exporta para ele com docker-compose.obs.yml.
+
+    Sem o override, o endpoint é vazio por padrão: `docker compose up` (sem obs) não tenta
+    exportar spans para um Tempo que não existe."""
+    compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text("utf-8"))
+    services = compose["services"]
+    assert "obs" in services["tempo"]["profiles"]
+    assert services["api"]["environment"]["OTEL_EXPORTER_OTLP_ENDPOINT"] == (
+        "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"
+    )
+    env_example = (ROOT / ".env.example").read_text("utf-8")
+    assert "\nOTEL_EXPORTER_OTLP_ENDPOINT=\n" in env_example
+    obs = yaml.safe_load((ROOT / "docker-compose.obs.yml").read_text("utf-8"))
+    api = obs["services"]["api"]
+    assert api["environment"]["OTEL_EXPORTER_OTLP_ENDPOINT"] == "http://tempo:4318"
+    assert "tempo" in api["depends_on"]
+    tempo_cfg = yaml.safe_load((ROOT / "deploy/tempo/tempo.yaml").read_text("utf-8"))
+    otlp = tempo_cfg["distributor"]["receivers"]["otlp"]["protocols"]["http"]
+    assert otlp["endpoint"].endswith(":4318")
+    ds = yaml.safe_load(
+        (ROOT / "deploy/grafana/provisioning/datasources/tempo.yml").read_text("utf-8")
+    )
+    tempo_ds = ds["datasources"][0]
+    assert (tempo_ds["type"], tempo_ds["uid"], tempo_ds["url"]) == (
+        "tempo",
+        "tempo",
+        "http://tempo:3200",
+    )
+    trace_dash = json.loads((ROOT / "deploy/grafana/dashboards/trace.json").read_text("utf-8"))
+    assert trace_dash["panels"][0]["datasource"]["uid"] == "tempo"
+
+
 @pytest.mark.req("REQ-INF-01")
 def test_compose_profile_obs_defines_prometheus_and_grafana() -> None:
     compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
     services = compose["services"]
-    for name in ("prometheus", "grafana"):
+    for name in ("prometheus", "grafana", "tempo"):
         assert name in services, f"serviço {name} ausente"
         assert "obs" in services[name].get("profiles", []), (
             f"{name} deve estar no profile 'obs' (não deve subir por padrão)"

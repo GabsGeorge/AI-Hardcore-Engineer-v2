@@ -1,5 +1,6 @@
 # Atalho opcional. Sem make (ex.: Windows), use o comando docker compose do comentário.
 COMPOSE_TEST = docker compose -f docker-compose.yml -f docker-compose.test.yml
+COMPOSE_OBS = docker compose -f docker-compose.yml -f docker-compose.obs.yml --profile obs
 USER ?= cliente1988
 ROLE ?= merchant
 
@@ -8,8 +9,8 @@ ROLE ?= merchant
 up:            # docker compose up -d --build
 	docker compose up -d --build
 
-up-obs:        # docker compose --profile obs up -d --build
-	docker compose --profile obs up -d --build
+up-obs:        # docker compose -f docker-compose.yml -f docker-compose.obs.yml --profile obs up -d --build
+	$(COMPOSE_OBS) up -d --build
 
 down:          # docker compose down
 	docker compose down

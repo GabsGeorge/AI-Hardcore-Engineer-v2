@@ -1,7 +1,12 @@
 # Teste de carga — `/v1/chat` (REQ-REL-04)
 
-**Cenário**: 20 VUs em `/v1/chat`, mix 70/30 simples/composto, duração 2 min, com fakes de
-LLM determinísticos nos cenários reproducíveis em laboratório.
+**Cenário**: 20 VUs em `/v1/chat`, mix 70/30 simples/composto, duração 2 min; cada VU faz um
+request e dorme 1 s (`sleep(1)` em `deploy/k6/chat.js`), então a vazão depende da latência.
+
+> **Auditoria 2026-11-24**: o run abaixo é de 2026-10-28, no código do repositório v1 (commit
+> `ea4449d`, que existe no histórico do v1; o v2 consolidou o histórico). A saída bruta do k6 não
+> foi versionada: os números são a transcrição daquele commit e não foram re-executados. O k6
+> **não** roda no CI (`.github/workflows/ci.yml` só faz `docker compose build` da imagem).
 
 ## Rodar localmente
 
@@ -44,10 +49,12 @@ Thresholds de bloqueio (ver `deploy/k6/chat.js`):
 
 ## Como ler o resultado
 
-- O k6 encerra com código ≠ 0 se qualquer threshold estourar — o CI falha.
+- O k6 encerra com código ≠ 0 se qualquer threshold estourar (o CI não roda o k6; é um passo
+  manual).
 - O resumo final sai no stdout; para arquivo use `--out json=load.json`.
-- Com o profile `obs` ativo, o Grafana (`dashboards/operational.json`) mostra a mesma
-  distribuição de latência pelas labels `getnet_http_request_duration_seconds`.
+- Com o profile `obs` ativo, o painel "p95 latência /v1/chat" de
+  `deploy/grafana/dashboards/operational.json` mostra a mesma distribuição pelo histograma
+  `getnet_http_request_duration_seconds`.
 
 ## Último run
 
@@ -55,7 +62,8 @@ Thresholds de bloqueio (ver `deploy/k6/chat.js`):
 **Stack**: `docker compose up -d api postgres redis mailpit` sem profile `obs`, dummy
 `OPENAI_API_KEY` (todas as respostas via `degraded_response`, retriever `index: empty` —
 mesmo assim o pipeline inteiro é exercitado: auth, guardrails, rate limit, idempotência,
-supervisor e route). Carga: 20 VUs × 2 min, 1 req/s por VU, 70/30 simples/composto.
+supervisor e route). Carga: 20 VUs × 2 min, 1 s de pausa entre requests de cada VU,
+70/30 simples/composto (800 iterações ≈ 6,6 req/s, coerente com ~2 s de latência + 1 s de pausa).
 
 | Métrica                                | Observado   | Threshold   | Resultado |
 |---------------------------------------|-------------|-------------|-----------|
@@ -77,21 +85,20 @@ iterations.....................: 800    6.579707/s
 
 ### Interpretação
 
-- Latência média de 2.03 s é consistente com o custo do grafo (supervisor → especialista
-  → síntese) rodando em CPU com embeddings dummy; a cauda em 5 s vem de duas iterações
-  isoladas (jitter do GIL + bloqueio momentâneo do pool pg).
-- Zero erros com 20 tokens distintos confirma que o rate limit por usuário (30/min)
-  acomoda o padrão esperado (um lojista fazendo poucas perguntas por minuto). Com um
-  único token em `AUTH_TOKEN` o teste bate em 429 após ~30 requests, o que é o
-  comportamento desejado — ver seção "Rodar localmente".
-- Com modelo real da OpenAI (gpt-4o-mini) a latência deve subir ~2–4 s por iteração;
-  o SLO p95 de 8 s dá folga para isso.
-- Com retriever populado (ingest ok) o `supervisor` passa a chamar `knowledge`/`policy`
-  em vez de cair direto no `degraded_response`; o teste de regressão será rodar o mesmo
-  cenário contra uma stack com `OPENAI_API_KEY` real e comparar p95.
+- **O que o run mede**: com chave dummy todas as respostas saem por `degraded_response`, então
+  o número cobre auth, guardrails, rate limit, idempotência e o caminho até o supervisor — não
+  cobre chamadas reais de LLM, retrieval nem tools. Não serve como estimativa de latência com
+  modelo real.
+- Máximo de 5.02 s: a causa não foi investigada (não há trace nem log do run versionado).
+- Zero erros com 20 tokens distintos é coerente com o rate limit por usuário de 30/min
+  (`RATE_LIMIT_PER_MIN`, padrão 30 em `src/app/core/config.py`): cada VU faz no máximo
+  ~20 req/min. O comportamento com um único token (429 após ~30 requests) é o esperado pelo
+  limite, mas não foi medido neste run.
+- Pendente: rodar o mesmo cenário com `OPENAI_API_KEY` real e base ingerida, quando o
+  supervisor passa a chamar `knowledge`/`support`, e comparar p95.
 
 ### Histórico
 
 | Data       | p95 simples | p95 composto | Erro | Observação                                    |
 |------------|-------------|--------------|------|-----------------------------------------------|
-| 2026-10-28 | 2.42 s      | 2.96 s       | 0 %  | Primeira execução oficial, dummy key, degraded |
+| 2026-10-28 | 2.42 s      | 2.96 s       | 0 %  | Único run; código v1, dummy key, degraded; saída bruta não versionada |
