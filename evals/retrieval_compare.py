@@ -7,6 +7,7 @@ strategy (hybrid+rerank) has recall@5 < 0.90.
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import json
 import math
@@ -39,8 +40,8 @@ def ndcg(predicted: list[str], relevant: list[str], k: int = 5) -> float:
     return dcg / ideal if ideal else 0.0
 
 
-def load_queries() -> list[dict[str, Any]]:
-    data = yaml.safe_load((ROOT / "evals" / "retrieval_labeled.yaml").read_text(encoding="utf-8"))
+def load_queries(labels: Path = ROOT / "evals" / "retrieval_labeled.yaml") -> list[dict[str, Any]]:
+    data = yaml.safe_load(labels.read_text(encoding="utf-8"))
     return list(data["queries"])
 
 
@@ -61,7 +62,7 @@ async def _urls_for(pool: Any, chunk_ids: list[int]) -> list[str]:
     return _unique([by_id[i] for i in chunk_ids if i in by_id])
 
 
-async def _run() -> dict[str, dict[str, float]]:
+async def _run(labels: Path) -> dict[str, dict[str, float]]:
     from app.core.config import get_settings
     from app.db.pool import close_pool, open_pool
     from app.rag import retriever
@@ -74,7 +75,7 @@ async def _run() -> dict[str, dict[str, float]]:
             "hybrid": [],
             "hybrid+rerank": [],
         }
-        for q in load_queries():
+        for q in load_queries(labels):
             text, rel = q["text"], q["relevant"]
             dense = await retriever.dense_search(pool, text, retriever.CANDIDATES)
             lexical = index.search(text, retriever.CANDIDATES, None) if index else []
@@ -99,7 +100,14 @@ async def _run() -> dict[str, dict[str, float]]:
 
 
 def main() -> int:
-    report = asyncio.run(_run())
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--labels",
+        type=Path,
+        default=ROOT / "evals" / "retrieval_labeled.yaml",
+        help="labelled queries (calibration set by default; evals/retrieval_holdout.yaml = C2)",
+    )
+    report = asyncio.run(_run(parser.parse_args().labels))
     print(json.dumps(report, indent=2))
     recall = report["hybrid+rerank"]["recall@5"]
     if recall < TARGET_RECALL:

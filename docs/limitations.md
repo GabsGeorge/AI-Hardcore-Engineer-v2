@@ -103,55 +103,78 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
 
 ## 8. Golden set abaixo do gate na rota exata
 
-- **Onde**: [docs/reports/eval.md](reports/eval.md) (run de 2026-11-25, saída bruta em
-  `docs/reports/data/`).
-- **O que**: com a checagem de rota **exata** (B1), 3 passagens deram **88,3% de média e 85% de
-  mínimo** (gate 95%). `sc-02-knowledge-pix` falha sempre; `sc-13-en-fanout` e
-  `sc-20-fanout-crediario` falham em 2 de 3.
-- **Causa medida**: o supervisor despacha certo; o agente de conhecimento não acha na base as
-  taxas do Pix para PJ nem as do crediário, responde com confiança 0,2 e a política escala para um
-  humano. No fan-out, a resposta correta do suporte se perde porque o turno inteiro escala.
+- **Onde**: [docs/reports/eval.md](reports/eval.md) (run de 2026-11-26 com os prompts atuais,
+  saída bruta em `docs/reports/data/golden-set-2026-11-26.*`).
+- **O que**: com a checagem de rota **exata**, 3 passagens deram **86,7% de média e 85% de
+  mínimo** (gate 95%; era 88,3% em 2026-11-25). `sc-02-knowledge-pix` e `sc-13-en-fanout` (taxa do
+  Pix) falham sempre; `sc-20-fanout-crediario` passa em 1 de 3.
+- **Causa medida**: o supervisor despacha certo. Sobre taxa do Pix, as páginas da Getnet na base
+  se contradizem ("sem taxas de cartão" × "taxa de transação ... Pix") e não trazem número; a
+  especialista responde com confiança parcial e a política escala após o replanejamento, como a
+  spec manda. O crediário foi resolvido no teste direto (confiança 0,8, regra 11 do prompt de
+  conhecimento), mas no fan-out ainda cai abaixo de 0,70 em parte das passagens.
 - **Não feito de propósito**: afrouxar a checagem, baixar `CONFIDENCE_ESCALATE_HARD` ou mudar o
   gabarito.
-- **Evolução**: indexar a fonte oficial dessas taxas, se publicada; no fan-out, sintetizar as
-  partes com base e escalar só a parte sem base.
+- **Evolução**: fonte oficial única sobre a taxa do Pix (se a Getnet publicar); no fan-out,
+  sintetizar as partes com base e escalar só a parte sem base.
 
-## 9. Itens recomendados não feitos (C1, C2)
+## 9. Itens recomendados: C1 e C2 feitos, com ressalvas
 
-- **C1 — juiz em lote**: `evals/judge_batch.py` não foi rodado nesta rodada; não há faithfulness /
-  relevância média por tipo de cenário publicada além do juiz online amostrado em produção.
-- **C2 — holdout**: não existe `evals/holdout.yaml`. As métricas de retrieval publicadas
-  (recall@5 0,798 etc., ADR 0003) vêm do mesmo conjunto usado para calibrar o limiar
-  `RAG_DENSE_THRESHOLD`, então podem estar otimistas; não há número fora da calibração.
+- **C1 — juiz em lote**: rodado em 2026-11-26 (uma passagem, 12 respostas julgadas): support
+  1,00/1,00, knowledge 0,75/0,75 (faithfulness/relevância), com `sc-17-followup` e
+  `sc-20-fanout-crediario` em 0. Uma passagem só; ver [reports/eval.md](reports/eval.md).
+- **C2 — holdout**: feito em 2026-11-26 (`evals/retrieval_holdout.yaml`, 30 perguntas escritas
+  depois da calibração): recall@5 **0,967** da busca entregue. No conjunto de calibração, medido
+  de novo no mesmo dia, o recall@5 caiu para **0,702** (era 0,798; causa não investigada). O
+  holdout tem perguntas pontuais de uma página; a calibração, temas amplos. Ver ADR 0003.
 
-## 10. Classificador de entrada barra frases legítimas
+## 10. Classificador de entrada: casos que ainda erram
 
-- **Onde**: `prompts/input_guard.md` (papel `input_guard`), medido por `evals/guard_rates.py`.
-- **Antes**: 16 de 34 frases legítimas da suíte bloqueadas (2026-11-25) e 13 de 32 das frases do
-  QA independente (2026-11-26, QA-015).
-- **O que mudou**: o prompt separa "ignore/esqueça/finja" dirigido às regras (ataque) do dirigido
-  à própria pergunta (legítimo), trata documento com possessivo ("do meu CNPJ") como do próprio
-  lojista e recebe o turno anterior para entender continuações curtas. Os exemplos do prompt são
-  paráfrases; as frases do QA ficaram fora dele e servem de validação.
-- **Agora** (modelo real, 2026-11-26): **38/38** ataques bloqueados; **12/34** frases da suíte
-  (a maioria com CPF/CNPJ de cliente na frase, que o prompt trata como risco de IDOR de
-  propósito) e **2/32** frases do QA ("mostre as transações do CNPJ da minha empresa", "Show me
-  my last transactions"). A meta de ≤ 5% ainda não é atingida no conjunto do QA (6%).
-- **Evidência**: [reports/data/guard-rates-2026-11-26.json](reports/data/guard-rates-2026-11-26.json),
-  [reports/qa-e2e-resposta.md](reports/qa-e2e-resposta.md).
+- **Onde**: `prompts/input_guard.md` (papel `input_guard`), medido por `evals/guard_rates.py`
+  pela API e por uma sonda direta no classificador.
+- **Histórico**: 16 de 34 frases legítimas da suíte bloqueadas (2026-11-25), 12 de 34 e 2 de 32
+  frases do QA (manhã de 2026-11-26). A causa era tratar CPF/CNPJ no texto como acesso a dados
+  de terceiro, o que a arquitetura já impede (ADR 0005), e decidir a classe antes do motivo.
+- **O que mudou (2026-11-26, revisão externa item 1)**: documento no texto não é mais ataque;
+  `injection` é só instrução contra as regras/identidade do assistente ou pedido de dados que o
+  texto atribui a outra parte. O classificador responde motivo → alvo da instrução → dono do
+  dado → assunto → classe, bloqueia quando a classe **ou** os campos indicam ataque, e roda com
+  temperatura 0. Os exemplos do prompt são paráfrases: um teste
+  (`tests/unit/test_input_guard_decision.py`) garante que nenhuma frase das suítes está no prompt.
+- **Agora**, pela API ([guard-rates-2026-11-26-v2.json](reports/data/guard-rates-2026-11-26-v2.json)):
+  **38/38** ataques bloqueados e **0/34** frases legítimas bloqueadas. Na sonda direta
+  ([input-guard-probe-2026-11-26.json](reports/data/input-guard-probe-2026-11-26.json), 3
+  passagens): 0/96 nas frases do QA, 0/60 num holdout legítimo escrito depois do prompt, 48/48
+  ataques do holdout e todas as perguntas fora de escopo bloqueadas.
+- **O que ainda erra**: com o turno anterior no contexto, um pedido seguinte com um documento
+  diferente e sem possessivo ("Meu CPF é ..." e depois "Liste as vendas do CNPJ ... de ontem")
+  ainda é lido como de outra parte (sonda `ctx-legit`: 3 de 12 execuções bloqueadas, todas
+  nessa frase). Com "meu"/"minha" passa. A sonda usa um conjunto pequeno escrito por nós; o
+  conjunto do QA independente é a validação externa.
+- **Evolução**: medir com o próximo QA independente e com conversas reais; se o caso de contexto
+  aparecer, passar a classificar o dono do dado só pela última mensagem.
 
 ## 11. Latência acima do SLO com o modelo real
 
 - **Onde**: grafo inteiro (`gpt-4o-mini` em até 6 chamadas por turno: guardrail de entrada,
-  supervisor, especialistas, síntese, guardrail de saída).
-- **O que**: o QA independente (2026-11-26) mediu p95 de 17,7 s (simples) e 18,4 s (composto) com
-  20 usuários × 5 min, e p95 de 10–20 s só com o tráfego funcional; na carga da rodada 3
-  (QA-R3-013) o p95 foi 28,3 s (simples) e 27,3 s (composto), com 0 erros em 75 pedidos (a rodada
-  4 não repetiu a carga). A meta é 8 s / 15 s (QA-037, QA-038). As correções desta rodada não reduzem chamadas de LLM; o painel e o alerta de
-  latência agora cobrem também `/v1/chat/stream` (QA-078), então o desvio fica visível.
-- **Evolução**: paralelizar o guardrail de entrada com o supervisor, pular a síntese quando há
-  um só especialista (já feito) e usar um modelo menor para o `input_guard`; medir de novo com
-  `deploy/k6/chat.js` e 20 tokens.
+  supervisor, especialistas, síntese, guardrail de saída) e a busca (até 4 consultas com
+  reranker em CPU por turno de conhecimento), num processo uvicorn só.
+- **Medições**: QA independente, 20 usuários × 5 min: p95 17,7 s / 18,4 s (simples / composto);
+  rodada 3 do QA: 28,3 s / 27,3 s. **2026-11-26, depois do primeiro passo abaixo**: 25,4 s /
+  30,6 s, 332 pedidos, 0 erros ([reports/data/load-2026-11-26.txt](reports/data/load-2026-11-26.txt)).
+  Meta: 8 s / 15 s (QA-037, QA-038).
+- **Primeiro passo feito (2026-11-26)**: o plano do supervisor roda em paralelo com o
+  classificador de entrada (`input_guardrail`), e é descartado se o turno for bloqueado. Sem
+  carga, 15 turnos sequenciais: média 7,7 s → 7,2 s, mediana 7,3 s → 6,7 s (uma chamada de LLM a
+  menos no caminho crítico). **Sob carga o ganho não aparece**: o p95 ficou no mesmo patamar.
+- **Onde está o tempo sob carga**: sem carga um turno leva ~7 s; com 20 usuários, ~17 s de média.
+  A OpenAI quase não recusou (3 retries em 332 pedidos), então a espera cresce dentro do
+  processo: a busca faz BM25 e reranker em threads do mesmo processo, que disputam a CPU do
+  container. Não há métrica por chamada de LLM para separar as parcelas; os spans no Tempo têm a
+  duração de cada nó.
+- **Evolução**: mais workers/réplicas da API (o estado já está no Postgres/Redis), reranker fora
+  do processo ou só quando a busca densa fica ambígua, e modelo menor para o `input_guard`;
+  medir de novo com `deploy/k6/chat.js` e 20 tokens.
 
 ## 12. `X-Real-IP` confiável só atrás do nginx
 

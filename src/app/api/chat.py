@@ -60,6 +60,7 @@ def turn_input(message: str) -> dict[str, Any]:
         "input_pii": found,
         "language": None,
         "plan": None,
+        "preplan": None,
         "attempts": 0,
         "step": 0,
         "escalation": None,

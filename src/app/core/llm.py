@@ -27,10 +27,17 @@ def get_model(role: str) -> Any:
     s = get_settings()
     if _model_factory is not None:
         return TracedModel(_model_factory(role), role, s.openai_model_primary or "test-double")
-    return TracedModel(_real_model(), role, s.openai_model_primary)
+    return TracedModel(_real_model(ROLE_TEMPERATURE.get(role)), role, s.openai_model_primary)
 
 
-def _real_model() -> Any:
+# Classifier roles answer the same message the same way: at the API default temperature the
+# input guard blocked "Show my settlements for CNPJ ... this week" in 2 of 5 runs and let it
+# through in the other 3 (docs/reports/data/input-guard-probe-2026-11-26.json). Other roles
+# keep the provider default.
+ROLE_TEMPERATURE: dict[str, float] = {"input_guard": 0.0}
+
+
+def _real_model(temperature: float | None = None) -> Any:
     """Primary chat model, chained to OPENAI_MODEL_FALLBACK when set (REQ-REL-02)."""
     s = get_settings()
     primary = ChatOpenAI(
@@ -38,6 +45,7 @@ def _real_model() -> Any:
         api_key=s.openai_api_key,
         timeout=20,
         max_retries=2,
+        temperature=temperature,
     )
     if s.openai_model_fallback:
         fallback = ChatOpenAI(
@@ -45,6 +53,7 @@ def _real_model() -> Any:
             api_key=s.openai_api_key,
             timeout=20,
             max_retries=1,
+            temperature=temperature,
         )
         return primary.with_fallbacks([fallback])
     return primary

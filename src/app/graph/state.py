@@ -61,6 +61,9 @@ class AgentState(TypedDict):
     summary: str | None
     language: str | None
     plan: dict[str, Any] | None
+    # Plan computed by input_guardrail in parallel with the classifier (latency, REQ-REL-04);
+    # the supervisor uses it on its first visit of the turn instead of planning again.
+    preplan: dict[str, Any] | None
     results: Annotated[list[AgentResult], operator.add]
     attempts: int
     step: int

@@ -3,10 +3,9 @@
 Scenario-level eval contra a API rodando, com `OPENAI_API_KEY` real e `evals/golden_set.yaml`
 como gabarito. Executado por `evals/run_eval.py` (profile `eval` do compose).
 
-> **2026-11-26**: depois do QA independente, os guardrails de entrada e saída e o agente de suporte
-> mudaram (QA-005, QA-006, QA-014, QA-015). A rodada desta página é anterior a isso; a
-> revalidação dos casos do QA com o modelo real está em [qa-e2e-resposta.md](qa-e2e-resposta.md).
-> O golden set completo não foi rodado de novo nesta revisão.
+> **2026-11-26 (noite)**: o golden set foi rodado de novo com os prompts atuais (3 passagens, rota
+> exata) e o juiz em lote rodou pela primeira vez. Resultados na seção "Run de 2026-11-26" abaixo;
+> as seções seguintes ficam como histórico.
 
 ## Rodar
 
@@ -18,6 +17,51 @@ docker compose --profile eval run --rm eval python evals/run_eval.py --runs 3
 
 O ingest hidrata a base com `src/app/rag/sources.yaml` (PT + EN) e a fonte curada. Sem
 `OPENAI_API_KEY` as embeddings não são geradas e os cenários de `knowledge` degradam.
+
+## Run de 2026-11-26 (prompts atuais, 3 passagens)
+
+Saída bruta: [data/golden-set-2026-11-26.json](data/golden-set-2026-11-26.json) e
+[data/golden-set-2026-11-26.log](data/golden-set-2026-11-26.log).
+
+| Métrica | Por passagem | Média | Mínimo |
+|---|---|---|---|
+| Rota exata | 18/20, 17/20, 17/20 | **86,7%** | 85% (gate 95%: FAIL) |
+| Tools | 5/5 ×3 | 100% | 100% |
+| Fontes (`has_sources`) | 4/4 ×3 | 100% | 100% (era 91,7% na 1ª tentativa do dia) |
+| Handoff, guardrails, PII | 3/3, 2/2, 1/1 ×3 | 100% | 100% |
+
+- **Sempre falham**: `sc-02-knowledge-pix` e `sc-13-en-fanout`, as duas perguntas de **taxa do
+  Pix**. Rota: `knowledge` → `supervisor` → `escalation`. **Instável**: `sc-20-fanout-crediario`
+  (1 de 3 passa).
+- **Causa (sc-02/sc-13)**: o supervisor despacha certo. A base tem o que a Getnet publica sobre
+  isso, e as páginas se contradizem: "Pix na maquininha ... sem taxas de cartão" e, na página de
+  MDR, "taxa de transação ... crédito, débito, Pix ou parcelamento", variando com volume e
+  segmento. Com fontes conflitantes e sem número, a especialista responde com confiança parcial
+  (0,2 a 0,6 em 3 execuções diretas), replaneja uma vez e a política escala (spec: duas
+  tentativas abaixo de 0,70). É o comportamento especificado; o gabarito espera resposta.
+- **O que mudou nesta revisão**: o prompt de conhecimento passou a tratar "a taxa depende do
+  contrato / consulte no app" como resposta (regra 11) e a buscar a página de MDR em perguntas de
+  taxa. No teste direto da especialista: crediário 3/3 com confiança 0,8 (antes 0,2); Pix em inglês
+  2/3 com 0,8; Pix PJ em português ainda 0,2–0,6. No golden, sc-19/sc-21 (crediário) passam nas
+  3, e sc-20 passa em 1 de 3: no fan-out a parte de conhecimento às vezes ainda fica abaixo de 0,70.
+- **Não feito de propósito**: baixar `CONFIDENCE_REPLAN`/`CONFIDENCE_ESCALATE_HARD`, mudar o
+  gabarito ou afrouxar a rota exata.
+
+### Juiz em lote (C1), primeira rodada
+
+`evals/judge_batch.py`, saída em [data/judge-batch-2026-11-26.json](data/judge-batch-2026-11-26.json).
+O juiz lê a mesma evidência do juiz online (passagens e dados de conta tirados do checkpoint); a
+primeira tentativa lia só as URLs públicas e dava 0 a todo suporte, então foi corrigido antes de
+publicar.
+
+| Tipo esperado | Julgados | Faithfulness | Relevância |
+|---|---|---|---|
+| support | 4 | **1,00** | **1,00** |
+| knowledge | 8 | **0,75** | **0,75** |
+
+Os dois zeros de `knowledge` são `sc-17-followup` e `sc-20-fanout-crediario`; os outros seis
+tiveram 1,0. Os 9 cenários restantes terminaram em `escalation` ou `safe_response` e não são
+julgados. Uma passagem só: com 12 respostas, é um sinal, não uma média estável.
 
 ## Regras de pontuação (`evals/run_eval.py::check`)
 

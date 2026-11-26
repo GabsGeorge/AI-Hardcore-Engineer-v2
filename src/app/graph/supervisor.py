@@ -139,7 +139,12 @@ async def supervisor(state: AgentState, config: RunnableConfig) -> Command[Any]:
         return Command(goto="degraded_response", update=update)
 
     if state.get("plan") is None:
-        plan, tokens = await plan_turn(state)
+        preplan = state.get("preplan")
+        plan: PlanModel | None
+        if preplan is not None:  # planned by input_guardrail, in parallel with the classifier
+            plan, tokens = PlanModel.model_validate(preplan["plan"]), int(preplan["tokens"])
+        else:
+            plan, tokens = await plan_turn(state)
         update["tokens_used"] = tokens
         if plan is None:
             return Command(goto="degraded_response", update=update)
