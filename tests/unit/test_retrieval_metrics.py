@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from evals.retrieval_compare import load_queries, mrr, ndcg, recall_at_k
+from evals.retrieval_compare import ROOT, load_queries, mrr, ndcg, recall_at_k
 
 
 @pytest.mark.req("REQ-RAG-04")
@@ -35,3 +35,13 @@ def test_ndcg_is_1_when_all_relevant_at_top() -> None:
 @pytest.mark.req("REQ-RAG-04")
 def test_labeled_set_has_minimum_queries() -> None:
     assert len(load_queries()) >= 5
+
+
+@pytest.mark.req("REQ-RAG-04")
+def test_holdout_is_separate_from_the_calibration_set() -> None:
+    """C2: 30 questions written after calibration; none repeats a calibration question."""
+    holdout = load_queries(ROOT / "evals" / "retrieval_holdout.yaml")
+    calibration = {q["text"] for q in load_queries()}
+    assert len(holdout) == 30
+    assert all(q["relevant"] for q in holdout)
+    assert not calibration & {q["text"] for q in holdout}

@@ -103,3 +103,34 @@ Validação com o modelo real em `docs/reports/smoke.md` (3 perguntas de control
 - (−) Recall@5 do conjunto ampliado (0,798) abaixo do gate de 0,90.
 - Próximos passos para fechar o gate: ampliar o conjunto rotulado, testar `bge-reranker-v2-m3` em
   hardware com mais memória e migrar o BM25 para `pg_search` em produção.
+
+## Remedição de 2026-11-26 e holdout (C2)
+
+Saída bruta: [reports/data/retrieval-2026-11-26.json](../reports/data/retrieval-2026-11-26.json).
+O holdout (`evals/retrieval_holdout.yaml`, 30 perguntas) foi escrito depois da calibração, com o
+rótulo escolhido lendo a página antes de rodar a busca; nada foi ajustado com ele.
+
+**Conjunto de calibração (14 perguntas), medido de novo:**
+
+| Estratégia | recall@5 | MRR | nDCG@5 |
+|---|---|---|---|
+| densa | 0,702 | 0,667 | 0,615 |
+| híbrida (RRF) | 0,560 | 0,589 | 0,518 |
+| híbrida + rerank (busca entregue) | 0,702 | 0,667 | 0,615 |
+
+**Holdout (30 perguntas):**
+
+| Estratégia | recall@5 | MRR | nDCG@5 |
+|---|---|---|---|
+| densa | 0,967 | 0,867 | 0,881 |
+| híbrida (RRF) | 0,900 | 0,758 | 0,771 |
+| híbrida + rerank (busca entregue) | 0,967 | 0,867 | 0,881 |
+
+- No conjunto de calibração o recall da densa caiu de 0,798 para 0,702 com a base atual (96
+  documentos, incluindo a página curada de ofertas); a causa não foi investigada nesta rodada.
+- O holdout é mais fácil que a calibração: cada pergunta mira uma página específica (erro ADQ,
+  domicílio bancário, Pix por aproximação), enquanto a calibração tem temas amplos com duas
+  páginas esperadas. Os dois números juntos são o retrato honesto: ~0,97 para pergunta pontual,
+  ~0,70 para tema amplo.
+- Nesta medição a busca entregue (híbrida + rerank) deu o mesmo resultado da densa nos dois
+  conjuntos.

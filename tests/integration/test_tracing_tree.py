@@ -165,7 +165,10 @@ async def test_compound_question_produces_full_span_tree(
 
     # LLM: um span por chamada, filho do nó que a fez.
     tree.assert_child("llm.input_guard", "input_guardrail")
-    tree.assert_child("supervisor.plan", "supervisor")
+    # 2026-11-26 (latência, REQ-REL-04): o plano do supervisor roda em paralelo com o
+    # classificador de entrada, dentro do nó input_guardrail; o supervisor só o adota. Antes o
+    # span `supervisor.plan` era filho de `supervisor`.
+    tree.assert_child("supervisor.plan", "input_guardrail")
     tree.assert_child("llm.supervisor", "supervisor.plan")
     tree.assert_child("llm.knowledge_rewrite", "knowledge")
     tree.assert_child("llm.knowledge", "knowledge")

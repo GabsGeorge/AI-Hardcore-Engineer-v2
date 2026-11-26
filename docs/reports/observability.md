@@ -31,7 +31,7 @@ Sem Langfuse e sem SaaS (ADR 0007).
 | Span | Onde nasce | Atributos |
 |---|---|---|
 | `input_guardrail`, `summarize`, `supervisor`, `knowledge`, `support`, `escalation`, `synthesize`, `degraded_response`, `safe_response`, `output_guardrail` | `traced_node` aplicado a cada nó em [src/app/graph/builder.py](../../src/app/graph/builder.py) | `graph.node`; `graph.interrupted=true` quando o nó pausa para HITL (`interrupt()` não vira erro) |
-| `supervisor.plan` | `plan_turn` em [src/app/graph/supervisor.py](../../src/app/graph/supervisor.py) | `prompt.name`, `prompt.version`, `llm.tokens`, `plan.route`, `plan.language` |
+| `supervisor.plan` | `plan_turn` em [src/app/graph/supervisor.py](../../src/app/graph/supervisor.py); desde 2026-11-26 o primeiro plano do turno roda dentro de `input_guardrail`, em paralelo com o classificador (o replanejamento continua sob `supervisor`) | `prompt.name`, `prompt.version`, `llm.tokens`, `plan.route`, `plan.language` |
 | `llm.<papel>` (`llm.supervisor`, `llm.knowledge_rewrite`, `llm.knowledge`, `llm.support`, `llm.escalation`, `llm.synthesize`, `llm.summarize`, `llm.input_guard`, `llm.output_guard`, `llm.online_eval`) | `TracedModel`, que `get_model` em [src/app/core/llm.py](../../src/app/core/llm.py) devolve para todo papel | `llm.role`, `gen_ai.system`, `gen_ai.request.model`, `gen_ai.response.model` (quando o provedor informa), `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `llm.latency_ms`, `prompt.name`, `prompt.version` |
 | `tool.<nome>` | `call_tool` em [src/app/agents/common.py](../../src/app/agents/common.py) | `tool.name`, `tool.agent`, `tool.status` (`ok`/`denied`/`error`/`timeout`), `tool.latency_ms`; status ERROR quando não é `ok` |
 | `retrieval.search` | `search` em [src/app/rag/retriever.py](../../src/app/rag/retriever.py) | `retrieval.strategy`, `retrieval.lang`, `retrieval.hits`, `retrieval.top_score` |
@@ -59,7 +59,7 @@ composta do teste `tests/integration/test_tracing_tree.py`. Não há trace de pr
 modelo real neste relatório.
 
 ```
-captured_at=2026-11-24T00:03:00+00:00
+captured_at=2026-11-24T00:03:00+00:00 (antes do plano em paralelo: hoje `supervisor.plan` aparece sob `input_guardrail`)
 status=200 trace_id=c161d0617111846c3ceea1f2b9b41252 route=['input_guardrail', 'supervisor', 'knowledge', 'support', 'supervisor', 'synthesize', 'output_guardrail']
 http.request  [188.9 ms]  http.route=/v1/chat http.response.status_code=200
 ├─ fastapi.dependencies  [3.0 ms]

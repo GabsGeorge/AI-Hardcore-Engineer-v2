@@ -56,6 +56,21 @@ Thresholds de bloqueio (ver `deploy/k6/chat.js`):
   `deploy/grafana/dashboards/operational.json` mostra a mesma distribuição pelo histograma
   `getnet_http_request_duration_seconds`.
 
+## Run de 2026-11-26 (plano do supervisor em paralelo com o classificador)
+
+20 VUs × 5 min, 20 tokens (`k6user01..20`), `gpt-4o-mini`. Saída completa em
+[data/load-2026-11-26.txt](data/load-2026-11-26.txt).
+
+| Cenário | média | mediana | p90 | p95 | alvo |
+|---|---|---|---|---|---|
+| simples | 16,1 s | 15,0 s | 22,8 s | **25,4 s** | < 8 s ❌ |
+| composto | 20,2 s | 20,2 s | 25,9 s | **30,6 s** | < 15 s ❌ |
+| erros HTTP | | | | **0/332** | < 1 % ✅ |
+
+Sem carga, o mesmo build fez 15 turnos sequenciais com média 7,2 s (7,7 s antes do plano em
+paralelo). A análise de onde está o tempo sob carga está em
+[docs/limitations.md](../limitations.md) §11.
+
 ## Último run
 
 **Quando**: 2026-10-28 15:57 UTC · **Host**: desenvolvedor local (Windows 10, Docker Desktop)

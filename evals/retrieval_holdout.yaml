@@ -1,0 +1,131 @@
+# Retrieval holdout (C2): 30 merchant questions written on 2026-11-26, after RAG_DENSE_THRESHOLD and
+# the reranker were calibrated on evals/retrieval_labeled.yaml. None of these questions was used to
+# tune anything. Each label is the page (or pages) that answers the question, chosen by reading the
+# page title and content before running retrieval. Questions avoid copying the page title.
+#
+#   docker compose --profile eval run --rm eval python evals/retrieval_compare.py \
+#       --labels evals/retrieval_holdout.yaml
+queries:
+  - id: h-01
+    text: "Minha maquininha mostra ADQ 1-50, o que significa?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-erros-maquininha/erro-adq-1-50/
+  - id: h-02
+    text: "A venda foi negada com erro ADQ 4-91, como resolvo?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-erros-maquininha/erro-adq-4-91/
+  - id: h-03
+    text: "Apareceu erro 4-83 de bandeira na máquina"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-erros-maquininha/erro-adq-4-83/
+  - id: h-04
+    text: "Quero mudar a conta bancária onde recebo minhas vendas"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-cadastro/como-trocar-o-domicilio-bancario/
+  - id: h-05
+    text: "Como desfaço uma venda que passei errado na maquininha?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-chargeback/como-estornar-uma-venda-na-maquininha-getnet/
+  - id: h-06
+    text: "Meu cliente contestou a compra no banco, o que acontece comigo?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-chargeback/o-que-e-chargeback/
+  - id: h-07
+    text: "Como conecto a máquina na internet da loja?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-configuracoes/como-configurar-o-wi-fi-na-sua-maquininha-getnet/
+  - id: h-08
+    text: "Qual a diferença entre venda autorizada e aprovada?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-gestao-de-vendas/entenda-o-que-e-venda-autorizada-aprovada-e-desfeita/
+  - id: h-09
+    text: "Quero ligar a antecipação automática pelo celular"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-antecipacao-de-venda/como-habilitar-antecipacao-automatica-pelo-app/
+  - id: h-10
+    text: "Dá para ativar a antecipação automática pelo site da Getnet?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-antecipacao-de-venda/como-habilitar-antecipacao-automatica-pelo-portal/
+  - id: h-11
+    text: "Quanto posso transferir por dia da minha conta Getnet?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-get-conta/como-realizo-uma-transferencia-e-quais-os-limites-diarios/
+  - id: h-12
+    text: "Preciso de mais uma máquina para o segundo caixa"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-maquininha/como-pedir-uma-maquininha-adicional/
+  - id: h-13
+    text: "Onde vejo em que pé está a entrega da minha Get Mini?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-rastreamento/como-acompanhar-entrega-get-mini/
+  - id: h-14
+    text: "Recebi um comprovante de Pix suspeito, como confiro se é verdadeiro?"
+    relevant:
+      - https://site.getnet.com.br/golpe-comprovante-de-pix/
+  - id: h-15
+    text: "O cliente pode pagar Pix encostando o celular na máquina?"
+    relevant:
+      - https://site.getnet.com.br/pix-por-aproximacao/
+  - id: h-16
+    text: "Como funciona pagar Pix com a digital?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-pix/como-utilizo-o-pix-por-biometria/
+      - https://site.getnet.com.br/pagamentos-por-biometria-via-pix/
+  - id: h-17
+    text: "Como aceito vale-refeição na minha máquina?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-voucher/como-habilitar-vale-refeicao-va-e-vale-alimentacao-vr-no-aplicativo-getnet-brasil/
+  - id: h-18
+    text: "O que é o programa de alimentação do trabalhador?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-voucher/o-que-e-o-pat/
+  - id: h-19
+    text: "Ainda dá para cobrar pelo WhatsApp Business com a Getnet?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-whatsapp-business/descontinuacao-whatsapp-business/
+  - id: h-20
+    text: "Quero encerrar meu contrato com a Getnet"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-cancelamento/como-cancelar-a-parceria/
+      - https://site.getnet.com.br/duvidas/cancelamento-descredenciamento/
+  - id: h-21
+    text: "Como divido o valor de uma venda com um parceiro?"
+    relevant:
+      - https://site.getnet.com.br/split-de-pagamento-veja-como-dividir-recebimentos-com-parceiros/
+  - id: h-22
+    text: "Quais plataformas de loja virtual integram com a Getnet?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-ecommerce/plugins-digitais-que-a-getnet-trabalha/
+  - id: h-23
+    text: "Parte do meu dinheiro fica retida como garantia, por quê?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-reserva-financeira/reserva-financeira/
+  - id: h-24
+    text: "Existe plano para receber as vendas em menos dias?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-receba-ja/plano-de-recebimento-reduzido/
+  - id: h-25
+    text: "Quais bandeiras de cartão a máquina aceita?"
+    relevant:
+      - https://site.getnet.com.br/cartoes-aceitos/
+      - https://site.getnet.com.br/duvidas/bandeiras/
+  - id: h-26
+    text: "Como termino meu cadastro no aplicativo para começar a vender?"
+    relevant:
+      - https://site.getnet.com.br/get-ajuda-cadastro/como-finalizar-seu-cadastro-no-aplicativo-getnet-brasil-e-comecar-a-aceitar-pagamentos/
+  - id: h-27
+    text: "Como estimar quanto vou faturar com a maquininha?"
+    relevant:
+      - https://site.getnet.com.br/simulador-de-vendas-da-maquininha-saiba-quanto-voce-ira-faturar/
+  - id: h-28
+    text: "What payment solutions does Getnet offer for restaurants?"
+    relevant:
+      - https://www.getnet.net/en/your-business/industries/restaurants
+  - id: h-29
+    text: "Does Getnet have APIs and documentation for developers?"
+    relevant:
+      - https://www.getnet.net/en/developers
+  - id: h-30
+    text: "Quais são as condições do contrato da máquina emprestada com taxa de adesão?"
+    relevant:
+      - https://site.getnet.com.br/wp-content/uploads/2025/08/Contrato-de-oferta-de-maquina-em-comodato-com-pagamento-de-taxa-de-adesao.pdf

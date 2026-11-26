@@ -118,14 +118,15 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
 - **Evolução**: fonte oficial única sobre a taxa do Pix (se a Getnet publicar); no fan-out,
   sintetizar as partes com base e escalar só a parte sem base.
 
-## 9. Itens recomendados: C1 feito com uma passagem, C2 não feito
+## 9. Itens recomendados: C1 e C2 feitos, com ressalvas
 
 - **C1 — juiz em lote**: rodado em 2026-11-26 (uma passagem, 12 respostas julgadas): support
   1,00/1,00, knowledge 0,75/0,75 (faithfulness/relevância), com `sc-17-followup` e
   `sc-20-fanout-crediario` em 0. Uma passagem só; ver [reports/eval.md](reports/eval.md).
-- **C2 — holdout**: não existe `evals/holdout.yaml`. As métricas de retrieval publicadas
-  (recall@5 0,798 etc., ADR 0003) vêm do mesmo conjunto usado para calibrar o limiar
-  `RAG_DENSE_THRESHOLD`, então podem estar otimistas; não há número fora da calibração.
+- **C2 — holdout**: feito em 2026-11-26 (`evals/retrieval_holdout.yaml`, 30 perguntas escritas
+  depois da calibração): recall@5 **0,967** da busca entregue. No conjunto de calibração, medido
+  de novo no mesmo dia, o recall@5 caiu para **0,702** (era 0,798; causa não investigada). O
+  holdout tem perguntas pontuais de uma página; a calibração, temas amplos. Ver ADR 0003.
 
 ## 10. Classificador de entrada: casos que ainda erram
 
@@ -156,15 +157,24 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
 ## 11. Latência acima do SLO com o modelo real
 
 - **Onde**: grafo inteiro (`gpt-4o-mini` em até 6 chamadas por turno: guardrail de entrada,
-  supervisor, especialistas, síntese, guardrail de saída).
-- **O que**: o QA independente (2026-11-26) mediu p95 de 17,7 s (simples) e 18,4 s (composto) com
-  20 usuários × 5 min, e p95 de 10–20 s só com o tráfego funcional; na carga da rodada 3
-  (QA-R3-013) o p95 foi 28,3 s (simples) e 27,3 s (composto), com 0 erros em 75 pedidos (a rodada
-  4 não repetiu a carga). A meta é 8 s / 15 s (QA-037, QA-038). As correções desta rodada não reduzem chamadas de LLM; o painel e o alerta de
-  latência agora cobrem também `/v1/chat/stream` (QA-078), então o desvio fica visível.
-- **Evolução**: paralelizar o guardrail de entrada com o supervisor, pular a síntese quando há
-  um só especialista (já feito) e usar um modelo menor para o `input_guard`; medir de novo com
-  `deploy/k6/chat.js` e 20 tokens.
+  supervisor, especialistas, síntese, guardrail de saída) e a busca (até 4 consultas com
+  reranker em CPU por turno de conhecimento), num processo uvicorn só.
+- **Medições**: QA independente, 20 usuários × 5 min: p95 17,7 s / 18,4 s (simples / composto);
+  rodada 3 do QA: 28,3 s / 27,3 s. **2026-11-26, depois do primeiro passo abaixo**: 25,4 s /
+  30,6 s, 332 pedidos, 0 erros ([reports/data/load-2026-11-26.txt](reports/data/load-2026-11-26.txt)).
+  Meta: 8 s / 15 s (QA-037, QA-038).
+- **Primeiro passo feito (2026-11-26)**: o plano do supervisor roda em paralelo com o
+  classificador de entrada (`input_guardrail`), e é descartado se o turno for bloqueado. Sem
+  carga, 15 turnos sequenciais: média 7,7 s → 7,2 s, mediana 7,3 s → 6,7 s (uma chamada de LLM a
+  menos no caminho crítico). **Sob carga o ganho não aparece**: o p95 ficou no mesmo patamar.
+- **Onde está o tempo sob carga**: sem carga um turno leva ~7 s; com 20 usuários, ~17 s de média.
+  A OpenAI quase não recusou (3 retries em 332 pedidos), então a espera cresce dentro do
+  processo: a busca faz BM25 e reranker em threads do mesmo processo, que disputam a CPU do
+  container. Não há métrica por chamada de LLM para separar as parcelas; os spans no Tempo têm a
+  duração de cada nó.
+- **Evolução**: mais workers/réplicas da API (o estado já está no Postgres/Redis), reranker fora
+  do processo ou só quando a busca densa fica ambígua, e modelo menor para o `input_guard`;
+  medir de novo com `deploy/k6/chat.js` e 20 tokens.
 
 ## 12. `X-Real-IP` confiável só atrás do nginx
 
