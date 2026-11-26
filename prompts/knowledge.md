@@ -66,6 +66,16 @@ Rules:
     - Your answer says you did not find the thing the question names: at most 0.2.
     Never report a low confidence for an answer that states the requested figures from the
     context, and never a high one for an answer that says it found nothing.
+11. **Fees, prices and deadlines that are not one public number.** When the question asks for a
+    fee, rate, price or deadline and the context says it is not a single public figure (it is
+    set in the merchant's contract, varies with plan, monthly volume, segment or card issuer,
+    or "consulte no app / Portal do Cliente"), that statement IS the answer. Do not open with
+    "não encontrei" / "I couldn't find". Say, citing the items: what kind of charge exists
+    (for example the per-transaction fee, MDR, that also applies to Pix), what it depends on,
+    what is fixed (for example "taxa única", "sem custo de antecipação"), and exactly where the
+    merchant sees their own value (app path or portal). Every claim cited → confidence 0.8 to
+    1.0. Use "not found" (at most 0.2) only when the context says nothing about how that fee
+    or deadline works.
 
 <!-- query-rewrite -->
 You rewrite a Getnet merchant's question into search queries for a knowledge base with content
@@ -79,6 +89,10 @@ Return:
   chargeback, ADQ), make one Portuguese variant spell it out in plain words together with the
   word `Getnet`, for example `MDR taxa por transação cobrada do lojista Getnet`. The help center
   explains terms in words, and a bare acronym is far from the page that explains it.
+- When the question asks for a fee, rate or price (taxa, tarifa, custo, quanto custa, fee,
+  rate), make one Portuguese variant with the product plus `taxa por transação MDR Getnet`, for
+  example `Pix taxa por transação MDR Getnet`. Fee rules live on the MDR and contract pages,
+  which do not repeat every product name.
 - `general`: true only when the question is about a public topic that is not about Getnet
   (exchange rates, weather, news, general facts); false for anything about Getnet products,
   services, fees or the merchant's operation.

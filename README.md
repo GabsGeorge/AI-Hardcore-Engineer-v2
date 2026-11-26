@@ -9,10 +9,10 @@ na própria máquina — não há dependência de Python ou `make` no host.**
 
 > **Status**: spec **001** (multi-agent) com 179 de 180 tasks fechadas e spec **002-web-ui** com
 > 98 de 105; as 8 abertas são testes que faltam, listados em
-> [docs/limitations.md](docs/limitations.md) §7. Testes: **659** no backend (pytest: 352 de
-> unidade, 37 de contrato, 146 de integração, 104 de segurança, 20 de repositório/infra; 658
+> [docs/limitations.md](docs/limitations.md) §7. Testes: **676** no backend (pytest: 369 de
+> unidade, 37 de contrato, 146 de integração, 104 de segurança, 20 de repositório/infra; 675
 > passam e 1 é pulado), **98** no frontend (Vitest) e **19** E2E (Playwright contra a stack real). Golden set com LLM real: rota
-> exata **88,3%** de média em 3 passagens, abaixo do gate de 95% — causa e números em
+> exata **86,7%** de média em 3 passagens (2026-11-26), abaixo do gate de 95% — causa e números em
 > [docs/reports/eval.md](docs/reports/eval.md). Quadros em
 > [specs/001-multi-agent-support/tasks.md](specs/001-multi-agent-support/tasks.md) e
 > [specs/002-web-ui/tasks.md](specs/002-web-ui/tasks.md).
@@ -94,7 +94,7 @@ teste consegue chamar a OpenAI ou o site da Getnet por acidente.
 
 | Camada | O que prova | Quantidade | Onde |
 |---|---|---|---|
-| Unidade | regras puras: `decide` do supervisor, máscara de PII, heurísticas do guardrail, chunking, RRF, checagem do eval, canal de eventos | 352 | `tests/unit/` |
+| Unidade | regras puras: `decide` do supervisor, máscara de PII, heurísticas do guardrail, chunking, RRF, checagem do eval, canal de eventos | 369 | `tests/unit/` |
 | Contrato | formato de `/v1/chat` e `/v1/chat/stream`, idempotência, validação, fuzz de payload | 37 | `tests/contract/` |
 | Integração do grafo | grafo, Postgres e Redis reais, com **LLM fake determinístico** | 146 | `tests/integration/` |
 | Segurança | IDOR, CSRF, RBAC, injeção direta/indireta/identidade, PII em logs e spans, limites | 104 | `tests/security/` |
@@ -401,7 +401,7 @@ jornada por perfil em [apps/web/PRODUCT.md](apps/web/PRODUCT.md).
   tracing com Tempo, métricas e dashboards no Grafana, avaliação online, k6, CI com gates
   (lint, tipos, testes, E2E, gitleaks, Trivy).
 - **O que não está entregue ou não atinge a meta**: golden set abaixo do gate na rota exata
-  (88,3%), recall@5 de 0,798 abaixo de 0,90, testes planejados que não existem e itens
+  (86,7%), recall@5 de 0,798 abaixo de 0,90, testes planejados que não existem e itens
   recomendados não feitos — lista completa em [docs/limitations.md](docs/limitations.md).
 
 ---
@@ -544,7 +544,7 @@ curl -s http://localhost:8000/v1/chat \
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
-# → 658 passed, 1 skipped (backend). Frontend: run --rm web-tests (98); E2E: run --rm web-e2e (19).
+# → 675 passed, 1 skipped (backend). Frontend: run --rm web-tests (98); E2E: run --rm web-e2e (19).
 ```
 
 ### 8. Usar a UI web
@@ -571,13 +571,15 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
 
 ### 9. Limitações (resumo)
 
-- Golden set com LLM real: rota exata **88,3%** de média, abaixo do gate de 95%; o supervisor
-  roteia certo, mas perguntas sem base (taxas do Pix PJ, do crediário) escalam para humano.
+- Golden set com LLM real: rota exata **86,7%** de média, abaixo do gate de 95%; o supervisor
+  roteia certo, mas as perguntas de taxa do Pix (fontes da Getnet conflitantes, sem número)
+  escalam para humano. Juiz em lote (1 passagem): faithfulness 1,00 no suporte e 0,75 no
+  conhecimento.
 - Retrieval: recall@5 de 0,798 no conjunto rotulado, abaixo da meta de 0,90, sem holdout.
-- O classificador de entrada barra 12 de 34 frases legítimas da suíte (a maioria com CPF/CNPJ) e 2
-  de 32 frases do QA independente com o modelo real (bloqueia os 38
-  ataques) e libera a pergunta se o LLM falhar (fail-open, compensado pela
-  identidade só no token e pelo guardrail de saída).
+- O classificador de entrada, com o modelo real, bloqueia os 38 ataques e 0 das 34 frases
+  legítimas da suíte (0 de 32 do QA independente na sonda); um follow-up com documento diferente
+  do turno anterior e sem "meu" ainda pode ser barrado. Libera a pergunta se o LLM falhar
+  (fail-open, compensado pela identidade só no token e pelo guardrail de saída).
 - Circuit breaker por processo; alguns testes planejados não existem.
 - Latência com o modelo real acima do SLO (p95 de 17,7 s a 28,3 s nas rodadas do QA independente).
 - Respostas do QA independente (2026-11-26), achado por achado:

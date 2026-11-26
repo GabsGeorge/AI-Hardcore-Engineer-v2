@@ -7,8 +7,14 @@ rota-esperada × rota-real.
     docker compose --profile eval run --rm eval python evals/judge_batch.py
 
 Saída: JSON em stdout + arquivo `/tmp/judge_report.json`. Cobra `faithfulness` e
-`relevance` médios por tipo de cenário (knowledge, support, escalation, safe_response);
-registra tokens e custo acumulado.
+`relevance` médios por tipo de cenário (knowledge, support, escalation, safe_response) e a nota
+de cada cenário julgado.
+
+O juiz lê a MESMA evidência que o juiz online (`judge_sources`: títulos/URLs mais as passagens e
+os dados de conta de cada especialista), tirada do checkpoint da conversa. Antes lia só a lista
+pública de fontes, sem texto: respostas de suporte (dados de conta, sem fonte) saíam com
+faithfulness 0 e as de conhecimento eram julgadas contra URLs. A API pública não expõe tokens,
+então o relatório não estima custo (antes somava um campo `usage` inexistente e dava 0).
 """
 
 from __future__ import annotations
@@ -27,21 +33,9 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 
 
-OPENAI_COSTS_PER_1K_TOKENS = {  # gpt-4o-mini, USD, outubro 2026
-    "input": 0.00015,
-    "output": 0.0006,
-}
-
-
 def load_scenarios() -> list[dict[str, Any]]:
     data = yaml.safe_load((ROOT / "evals" / "golden_set.yaml").read_text(encoding="utf-8"))
     return list(data["scenarios"])
-
-
-def _format_sources(sources: list[dict[str, Any]]) -> str:
-    if not sources:
-        return "(no sources)"
-    return "\n".join(f"- {s.get('url', '?')}: {s.get('snippet', '')[:200]}" for s in sources)
 
 
 def _expected_route(expected: dict[str, Any]) -> str:
@@ -71,11 +65,21 @@ def _observed_route(body: dict[str, Any]) -> str:
 
 
 async def _run() -> dict[str, Any]:
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
     from app.api.auth import create_token
+    from app.api.chat import graph_config, judge_sources
+    from app.api.schemas import ChatResponse
+    from app.core.config import get_settings
+    from app.db.pool import open_pool
+    from app.graph.builder import build_graph
     from app.ops.online_eval import _judge  # noqa: PLC2701 — reuso proposital
 
     base_url = os.environ.get("EVAL_BASE_URL", "http://api:8000")
-    token = create_token(os.environ.get("EVAL_USER", "cliente1988"), "merchant")
+    user_id = os.environ.get("EVAL_USER", "cliente1988")
+    token = create_token(user_id, "merchant")
+    graph = build_graph(AsyncPostgresSaver(await open_pool(get_settings().database_url)))
+    judged: list[dict[str, Any]] = []
 
     cm: dict[tuple[str, str], int] = defaultdict(int)
     scores_by_bucket: dict[str, dict[str, list[float]]] = defaultdict(
@@ -101,24 +105,26 @@ async def _run() -> dict[str, Any]:
             obs = _observed_route(body)
             cm[(exp, obs)] += 1
             totals["requests"] += 1
-            # tokens: coleta best-effort (não é obrigatório na response pública)
-            totals["tokens_in"] += int(body.get("usage", {}).get("prompt_tokens", 0))
-            totals["tokens_out"] += int(body.get("usage", {}).get("completion_tokens", 0))
 
             # LLM-as-judge: só avalia caminhos de resposta (não safe_response/escalation)
             if obs in {"knowledge", "support", "other"} and body.get("response"):
+                response = ChatResponse.model_validate(body)
+                config = graph_config(user_id, response.conversation_id, response.trace_id)
+                state = (await graph.aget_state(config)).values
                 verdict = await _judge(
-                    sc["message"], body["response"], _format_sources(body.get("sources", []))
+                    sc["message"], response.response, judge_sources(state, response)
                 )
                 if verdict:
                     bucket = scores_by_bucket[exp]
                     bucket["faithfulness"].append(verdict.faithfulness)
                     bucket["relevance"].append(verdict.relevance)
-
-    cost_usd = (
-        totals["tokens_in"] / 1000 * OPENAI_COSTS_PER_1K_TOKENS["input"]
-        + totals["tokens_out"] / 1000 * OPENAI_COSTS_PER_1K_TOKENS["output"]
-    )
+                    judged.append(
+                        {
+                            "id": sc["id"],
+                            "faithfulness": verdict.faithfulness,
+                            "relevance": verdict.relevance,
+                        }
+                    )
 
     return {
         "confusion_matrix": {f"{e}->{o}": n for (e, o), n in sorted(cm.items())},
@@ -132,12 +138,8 @@ async def _run() -> dict[str, Any]:
             for b, v in scores_by_bucket.items()
             if v["relevance"]
         },
-        "totals": {
-            "requests": totals["requests"],
-            "tokens_in": totals["tokens_in"],
-            "tokens_out": totals["tokens_out"],
-            "cost_usd": round(cost_usd, 4),
-        },
+        "totals": {"requests": totals["requests"], "judged": len(judged)},
+        "per_scenario": judged,
     }
 
 

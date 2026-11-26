@@ -25,10 +25,35 @@ Classification = Literal["safe", "injection", "out_of_scope", "sensitive", "huma
 
 
 class InputGuardResult(BaseModel):
-    """Structured output of the ``input_guard`` role (REQ-GR-01, REQ-GR-03)."""
+    """Structured output of the ``input_guard`` role (REQ-GR-01, REQ-GR-03).
 
-    classification: Classification
+    Field order is the order the model writes them: the short ``reason`` first, then the two
+    questions that decide an attack (what an instruction targets, who the text says owns the
+    data), the topic, and only then the ``classification``. With the label first, gpt-4o-mini
+    wrote "ignore aimed at the previous message" as the reason and still answered `injection`.
+    The defaults keep older scripted fakes (classification only) valid.
+    """
+
     reason: str = Field(default="", max_length=200)
+    instruction_target: Literal["none", "conversation", "assistant_rules"] = "none"
+    data_owner: Literal["no_account_data", "merchant", "other_party"] = "no_account_data"
+    topic: Literal["getnet", "weather_or_exchange", "conversation", "other"] = "getnet"
+    classification: Classification
+
+
+def verdict(result: InputGuardResult) -> Classification:
+    """Blocking classes win if the label OR the fields behind it say so (never the reverse):
+    an `assistant_rules` target or an `other_party` owner is an attack even when the label
+    drifted, and an `other` topic is out of scope."""
+    if (
+        result.classification == "injection"
+        or result.instruction_target == "assistant_rules"
+        or result.data_owner == "other_party"
+    ):
+        return "injection"
+    if result.classification == "out_of_scope" or result.topic == "other":
+        return "out_of_scope"
+    return result.classification
 
 
 # Heuristics (REQ-GR-01): short-circuit the loudest attacks without any LLM call. These cover
@@ -139,7 +164,7 @@ async def _classify(text: str, context: str = "") -> Classification | None:
         )
     except Exception:
         return None
-    return result.classification if isinstance(result, InputGuardResult) else None
+    return verdict(result) if isinstance(result, InputGuardResult) else None
 
 
 async def input_guardrail(state: AgentState) -> dict[str, Any]:
