@@ -5,16 +5,16 @@ Cada item lista **onde**, **o que** e **o caminho de evolução**.
 
 ---
 
-## 1. Rate limit em janela fixa (processo-local)
+## 1. Rate limit por usuário em Redis (janela deslizante)
 
 - **Onde**: [src/app/api/limits.py](../src/app/api/limits.py)
-- **O que**: contador por `user_id` com `INCR` + `EXPIRE` em Redis, janela fixa de 60 s.
-- **Consequência**: na troca de minuto, um lojista pode disparar **até 2× o limite em uma
-  janela deslizante de 60 s** (as duas pontas do minuto).
-- **Risco aceito**: baixo. O limite por si só é defensivo, não contratual, e o perfil de uso
-  pessoa-máquina não aproveita essa borda.
-- **Evolução**: trocar por "sliding window log" ou "token bucket" quando o tráfego crescer.
-  A interface do módulo não muda — só a implementação de `check_rate_limit`.
+- **O que**: até então era um contador por minuto fixo, e uma rajada que atravessava a virada do
+  minuto passava com até 2× o limite (o QA independente viu 35/35 aceitas, QA-027). Agora é uma
+  janela deslizante de 60 s (sorted set por `user_id`); pedido recusado não conta, e o
+  `Retry-After` é o instante em que o pedido mais antigo sai da janela. Teste:
+  `tests/security/test_rate_limit.py::test_burst_across_the_minute_boundary_is_limited`.
+- **Limite que fica**: é por `user_id` (`users.id`). Todas as contas de operador/admin agem como o
+  mesmo usuário seed (ver §13), então dividem o mesmo balde.
 
 ## 2. Circuit breaker in-process
 
@@ -95,9 +95,11 @@ a quebrar a CI. A lista é curta por desenho.
 A auditoria de 2026-11-24 desmarcou em `specs/*/tasks.md` as tasks cujo teste não existe:
 contrato de `/v1/auth/*` por schemathesis (T036), verificação de e-mail com token usado/expirado
 (T038), listagem de sessões (T039, parcial), "o mesmo link de reset não serve de novo" (T040,
-parcial), métricas/spans de auth (T035), E2E de privacidade (T080), chat E2E com login e api
-reais fora do HITL (T054, parcial) e o arquivo de roteiros dos 10+8 cenários (T126). O
-comportamento existe no código; falta o teste que o prove.
+parcial), métricas/spans de auth (T035), chat E2E com login e api reais fora do HITL (T054,
+parcial) e o arquivo de roteiros dos 10+8 cenários (T126). O comportamento existe no código;
+falta o teste que o prove. O E2E de privacidade (T080) foi feito em 2026-11-26, depois que o QA
+independente mostrou que a tela era um placeholder; a listagem de sessões (T039) ganhou teste de
+integração para o lojista vinculado (QA-060), mas a task continua parcial.
 
 ## 8. Golden set abaixo do gate na rota exata
 
@@ -125,14 +127,61 @@ comportamento existe no código; falta o teste que o prove.
 ## 10. Classificador de entrada barra frases legítimas
 
 - **Onde**: `prompts/input_guard.md` (papel `input_guard`), medido por `evals/guard_rates.py`.
-- **O que**: com o modelo real, o classificador bloqueia os 38 ataques da suíte, mas também **16
-  das 34 frases legítimas** de `tests/security/data/legit_phrases.yaml` (47%): correções do tipo
-  "ignore a mensagem anterior", perguntas com o CPF/CNPJ do próprio lojista e até "qual é o e-mail
-  de contato do suporte". A heurística (E1) já não barra essas frases; o bloqueio vem do LLM.
-- **Evidência**: [reports/data/guard-rates-2026-11-25.json](reports/data/guard-rates-2026-11-25.json).
-- **Evolução**: incluir exemplos negativos no prompt (correções de mensagem, documento do próprio
-  lojista, perguntas de contato) e medir de novo as duas taxas juntas, exigindo que o bloqueio dos
-  ataques continue ≥ 95%.
+- **Antes**: 16 de 34 frases legítimas da suíte bloqueadas (2026-11-25) e 13 de 32 das frases do
+  QA independente (2026-11-26, QA-015).
+- **O que mudou**: o prompt separa "ignore/esqueça/finja" dirigido às regras (ataque) do dirigido
+  à própria pergunta (legítimo), trata documento com possessivo ("do meu CNPJ") como do próprio
+  lojista e recebe o turno anterior para entender continuações curtas. Os exemplos do prompt são
+  paráfrases; as frases do QA ficaram fora dele e servem de validação.
+- **Agora** (modelo real, 2026-11-26): **38/38** ataques bloqueados; **12/34** frases da suíte
+  (a maioria com CPF/CNPJ de cliente na frase, que o prompt trata como risco de IDOR de
+  propósito) e **2/32** frases do QA ("mostre as transações do CNPJ da minha empresa", "Show me
+  my last transactions"). A meta de ≤ 5% ainda não é atingida no conjunto do QA (6%).
+- **Evidência**: [reports/data/guard-rates-2026-11-26.json](reports/data/guard-rates-2026-11-26.json),
+  [reports/qa-e2e-resposta.md](reports/qa-e2e-resposta.md).
+
+## 11. Latência acima do SLO com o modelo real
+
+- **Onde**: grafo inteiro (`gpt-4o-mini` em até 6 chamadas por turno: guardrail de entrada,
+  supervisor, especialistas, síntese, guardrail de saída).
+- **O que**: o QA independente (2026-11-26) mediu p95 de 17,7 s (simples) e 18,4 s (composto) com
+  20 usuários × 5 min, e p95 de 10–20 s só com o tráfego funcional; a meta é 8 s / 15 s
+  (QA-037, QA-038). As correções desta rodada não reduzem chamadas de LLM; o painel e o alerta de
+  latência agora cobrem também `/v1/chat/stream` (QA-078), então o desvio fica visível.
+- **Evolução**: paralelizar o guardrail de entrada com o supervisor, pular a síntese quando há
+  um só especialista (já feito) e usar um modelo menor para o `input_guard`; medir de novo com
+  `deploy/k6/chat.js` e 20 tokens.
+
+## 12. `X-Real-IP` confiável só atrás do nginx
+
+- **Onde**: `_client_ip` em `src/app/api/auth_endpoints.py`.
+- **O que**: o limite de login/cadastro por IP lê `X-Real-IP`, que o nginx preenche. Quem fala
+  direto com a porta 8000 pode forjar o cabeçalho (QA-059). A porta 8000 agora é publicada só em
+  `127.0.0.1` (`docker-compose.yml`), então só quem já está na máquina consegue isso; o limite por
+  e-mail não depende do IP.
+- **Evolução**: lista de proxies confiáveis (`TRUSTED_PROXIES`) e uso do `X-Real-IP` só quando o
+  par TCP é o nginx.
+
+## 13. Textos que seguem o idioma da conversa, não o da interface
+
+- **O que**: o resumo do chamado na fila, o prefixo "Nosso atendente respondeu:" e os alvos da
+  auditoria (`account:acc_...`) são dados gravados no idioma da conversa (ou identificadores),
+  não textos da interface. Com a UI em inglês, uma conversa em português continua aparecendo em
+  português (QA-067, QA-069, QA-070). Os textos da interface (botões, rótulos, resultado da
+  auditoria) foram traduzidos.
+- **Também**: todas as contas web de operador/admin agem como o primeiro `users.id` seed do papel
+  (`_seed_user_for_role`), então a auditoria e o rate limit não distinguem dois operadores.
+
+## 14. Guardrail de saída ainda troca parte das respostas
+
+- **Onde**: `src/app/guardrails/output.py` (papel `output_guard`, `prompts/grounding.md`).
+- **O que**: na revalidação do QA (2026-11-26, 38 turnos com o modelo real) 7 respostas foram
+  trocadas por "não encontrei base suficiente". A causa principal do QA (compostas julgadas sem os
+  dados da conta) foi corrigida; dos 7 que sobraram, uns são acertos (número ou preço diferente da
+  passagem) e o caso do WhatsApp é um falso positivo conhecido do `gpt-4o-mini` como verificador.
+- **Evolução**: verificador com modelo maior, ou checagem por afirmação (quebrar a resposta em
+  frases e checar cada uma contra a passagem citada), medindo acertos e falsos positivos juntos.
+- **Evidência**: [reports/qa-e2e-resposta.md](reports/qa-e2e-resposta.md).
 
 ---
 

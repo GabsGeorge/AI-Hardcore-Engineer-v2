@@ -110,13 +110,17 @@ ou abra `http://localhost:3000/d/getnet-trace?var-trace_id=<trace_id>`.
   não publicada pelo compose (`METRICS_PORT=0` desliga).
 - **Scrape**: [deploy/prometheus/prometheus.yml](../../deploy/prometheus/prometheus.yml), job
   `getnet-api` em `api:9100`, `scrape_interval: 15s`.
+- **Séries em zero desde a partida**: `initialise_label_sets` cria os rótulos conhecidos
+  (ferramentas, resultados de login, tipos de e-mail, endpoints do chat) com valor 0, então os
+  painéis mostram 0 em vez de "No data" antes do primeiro evento (QA-075..QA-077).
 - **Definições**: [src/app/observability/metrics.py](../../src/app/observability/metrics.py)
   (fonte única; `getnet_online_eval_score` foi movida para lá nesta revisão).
 
 | Métrica | Tipo | Labels | Incrementada em |
 |---|---|---|---|
 | `getnet_http_requests_total` | counter | `route`, `method`, `status` | middleware `trace_requests` (`main.py`) |
-| `getnet_http_request_duration_seconds` | histogram | `route` | idem |
+| `getnet_http_request_duration_seconds` | histogram | `route` | idem (em `/v1/chat/stream` mede só até o início do fluxo) |
+| `getnet_chat_turn_duration_seconds` | histogram | `endpoint` (`/v1/chat`, `/v1/chat/stream`) | `api/chat.py`, do pedido à resposta final; base dos painéis de latência e do alerta (QA-078) |
 | `getnet_route_total` | counter | `node` | `_dispatch` do supervisor |
 | `getnet_tokens_total` | counter | `role` | `TracedModel` (toda chamada de LLM) |
 | `getnet_tool_errors_total` | counter | `tool` | `call_tool` quando o status não é `ok` |
@@ -135,7 +139,7 @@ ou abra `http://localhost:3000/d/getnet-trace?var-trace_id=<trace_id>`.
 
 | Alerta | Expressão (resumo) | `for` | Severidade |
 |---|---|---|---|
-| `HighRequestLatencyP95` | p95 de `getnet_http_request_duration_seconds{route="/v1/chat"}` > 8 s | 10m | page |
+| `HighRequestLatencyP95` | p95 de `getnet_chat_turn_duration_seconds` (`/v1/chat` e `/v1/chat/stream`) > 8 s | 10m | page |
 | `ToolErrorRateHigh` | `rate(getnet_tool_errors_total)` / `rate(getnet_route_total)` > 0,05 | 10m | warn |
 | `GuardrailBlockSpike` | `sum(rate(getnet_guardrail_blocks_total[5m]))` > 1 | 5m | warn |
 | `OnlineEvalScoreLow` | média 1 h (`_sum`/`_count`) de `getnet_online_eval_score` por `metric` < 0,7, com ≥ 5 turnos avaliados na hora | 15m | warn |
@@ -192,7 +196,9 @@ pytest tests/integration/test_tracing_tree.py tests/integration/test_tracing.py 
 ```
 
 **api de pé + métricas na porta interna** (uvicorn local contra o Postgres/Redis acima, sem
-`OPENAI_API_KEY`):
+`OPENAI_API_KEY`). A porta 9100 só fica no host nesse modo local; com o compose ela não é
+publicada (de propósito) e a leitura é de dentro do container (QA-091):
+`docker compose exec api python -c "import urllib.request as u; print(u.urlopen('http://127.0.0.1:9100/metrics').read().decode())"`.
 
 ```bash
 curl -s -i http://127.0.0.1:8000/readyz

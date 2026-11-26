@@ -97,3 +97,57 @@ async def test_link_and_second_link_conflicts_then_unlink_works(
         headers={"X-CSRF-Token": csrf},
     )
     assert third.status_code == 204
+
+
+@pytest.mark.req("REQ-API-02")
+async def test_self_registered_merchant_links_to_seed_establishment(
+    client: httpx.AsyncClient, db_pool: Pool
+) -> None:
+    """QA-003: o cadastro já cria um estabelecimento demo (wusr_*) com o mesmo account_id;
+    o vínculo com cliente1988 libera esse estabelecimento em vez de dar 500 (UNIQUE)."""
+    await _login_as_admin(client, db_pool)
+    acc = await _merchant_account(db_pool, "auto@example.com")
+    own = await repo.create_merchant_for_account(db_pool, account_id=acc.id, display_name="Loja")
+    await _seed_merchant(db_pool, "cliente1988")
+
+    r = await client.post(
+        "/v1/admin/merchants/cliente1988/link",
+        json={"account_id": acc.id},
+        headers={"X-CSRF-Token": client.cookies["csrf"]},
+    )
+    assert r.status_code == 204
+    assert await repo.merchant_user_id_for(db_pool, acc.id) == "cliente1988"
+    async with db_pool.connection() as conn:
+        row = await (
+            await conn.execute("SELECT account_id FROM merchants WHERE user_id = %s", (own,))
+        ).fetchone()
+        audit = await (
+            await conn.execute(
+                "SELECT metadata FROM audit_events WHERE action = 'merchant_linked'"
+                " ORDER BY id DESC LIMIT 1"
+            )
+        ).fetchone()
+    assert row is not None and row["account_id"] is None
+    assert audit is not None and audit["metadata"]["released_merchant"] == own
+
+
+@pytest.mark.req("REQ-API-02")
+async def test_reseed_keeps_the_admin_link(client: httpx.AsyncClient, db_pool: Pool) -> None:
+    """QA-002: cada `docker compose run --rm api ...` roda o seed de novo; o vínculo fica."""
+    from datetime import date
+
+    from app.db.migrate import apply_seed
+
+    await apply_seed(db_pool, date(2026, 11, 26))
+    acc = await _merchant_account(db_pool, "seed@example.com")
+    linked, _ = await repo.link_merchant(db_pool, merchant_user_id="cliente1988", account_id=acc.id)
+    assert linked
+    await apply_seed(db_pool, date(2026, 11, 27))
+    assert await repo.merchant_user_id_for(db_pool, acc.id) == "cliente1988"
+    async with db_pool.connection() as conn:
+        n = await (
+            await conn.execute(
+                "SELECT count(*) AS n FROM transactions WHERE merchant_id = 'cliente1988'"
+            )
+        ).fetchone()
+    assert n is not None and n["n"] > 0

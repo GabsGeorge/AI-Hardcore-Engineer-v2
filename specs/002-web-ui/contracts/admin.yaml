@@ -38,8 +38,9 @@ components:
         expired_today:      { type: integer }
     AuditEvent:
       type: object
-      required: [ts, actor_id, actor_role, action, target, outcome, trace_id]
+      required: [id, ts, actor_id, actor_role, action, target, outcome, trace_id]
       properties:
+        id:         { type: integer }
         ts:         { type: string, format: date-time }
         actor_id:   { type: string }
         actor_role: { type: string }
@@ -122,6 +123,7 @@ paths:
       parameters:
         - { in: query, name: action, schema: { type: string } }
         - { in: query, name: since,  schema: { type: string, format: date-time } }
+        - { in: query, name: before_id, description: "Próxima página: eventos com id menor (QA-065).", schema: { type: integer, minimum: 1 } }
         - { in: query, name: limit,  schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
       responses:
         "200":

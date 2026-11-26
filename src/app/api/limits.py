@@ -1,7 +1,8 @@
 """Per-user rate limit and Idempotency-Key replay in Redis (REQ-SEC-08, REQ-API-06).
 
-shortcut: fixed 60 s window, a user can burst up to 2x the limit across a minute boundary;
-switch to a sliding window if the limit becomes contractual.
+The rate limit is a sliding 60 s window (a sorted set of request times per user): a fixed
+per-minute counter let a burst that crossed the minute boundary through, up to twice the limit
+(QA-027).
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import json
 import math
 import time
 from typing import Any
+from uuid import uuid4
 
 from fastapi import Request
 from redis.asyncio import Redis
@@ -23,15 +25,31 @@ _IDEM_TTL = 24 * 3600
 _IN_FLIGHT_TTL = 120
 
 
+_WINDOW_SECONDS = 60
+
+
+def _now() -> float:
+    return time.time()
+
+
 async def check_rate_limit(request: Request, user_id: str) -> None:
+    """At most ``rate_limit_per_min`` accepted requests in any 60 s window. A refused request
+    is not counted, and Retry-After is when the oldest accepted one leaves the window."""
     redis: Redis = request.app.state.redis
-    now = time.time()
-    key = f"rl:{user_id}:{int(now // 60)}"
-    count = await redis.incr(key)
-    if count == 1:
-        await redis.expire(key, 65)
+    now = _now()
+    key = f"rl:{user_id}"
+    member = f"{now:.6f}:{uuid4().hex[:8]}"
+    async with redis.pipeline(transaction=True) as pipe:
+        pipe.zremrangebyscore(key, 0, now - _WINDOW_SECONDS)
+        pipe.zadd(key, {member: now})
+        pipe.zcard(key)
+        pipe.zrange(key, 0, 0, withscores=True)
+        pipe.expire(key, _WINDOW_SECONDS + 1)
+        _, _, count, oldest, _ = await pipe.execute()
     if count > get_settings().rate_limit_per_min:
-        retry_after = max(1, math.ceil(60 - now % 60))
+        await redis.zrem(key, member)
+        oldest_at = float(oldest[0][1]) if oldest else now
+        retry_after = max(1, math.ceil(oldest_at + _WINDOW_SECONDS - now))
         raise AppError(
             429,
             "rate_limited",

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
 import { Alert, Button, Card, FormField, Input, Label, StatusBadge, useToast } from "@/design";
 import { api, isApiError } from "@/lib/api";
+import { TicketContext } from "./TicketContext";
 import type { HandoffRow } from "./types";
 
 type QueueResponse = { items: HandoffRow[] };
@@ -91,12 +92,7 @@ export function TicketPage() {
         <p className="mt-1 text-body text-ink-700">{ticket.summary}</p>
       </Card>
 
-      <Card>
-        <Label>{t("ticket.context")}</Label>
-        <pre className="mt-1 overflow-auto text-label text-ink-500">
-          {JSON.stringify(ticket.context, null, 2)}
-        </pre>
-      </Card>
+      <TicketContext context={ticket.context} />
 
       {requiresDecision ? (
         <Card>

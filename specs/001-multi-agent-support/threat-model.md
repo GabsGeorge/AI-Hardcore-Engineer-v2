@@ -64,12 +64,16 @@ roda a suite inteira sem rede externa; `scripts/check_traceability.py` cruza REQ
 | **CSRF em endpoints cookie-authed** | Form malicioso em terceiro domínio dispara ação do lojista logado | Middleware global `enforce_csrf` roda antes de todo POST/PUT/PATCH/DELETE autenticado por cookie; double-submit (`csrf` cookie legível + header `X-CSRF-Token`); Bearer isento | REQ-SEC-01 | `tests/security/test_csrf_middleware.py` |
 | **Abuso de cadastro e recuperação de senha** | Bombardeio de e-mails para um endereço ou varredura de endereços a partir de um IP | 5 pedidos por hora por IP e por e-mail (hash) em `/v1/auth/register` e `/v1/auth/password/reset-request`; 429 com `Retry-After` antes de consultar a conta, mesma resposta para e-mail novo e existente | REQ-SEC-08 | `tests/integration/test_auth_flow_rate_limit.py` |
 | **SSE DoS leve (slots por usuário)** | Lojista abre N conexões SSE do events channel e segura o pool | `MAX_SSE_PER_USER=3` com 429 `too_many_connections`; slot liberado no `finally` do generator | REQ-API-07, REQ-REL-01 | `tests/security/test_sse_connection_limit.py` |
+| **CSRF contornado com `Authorization: Bearer ` vazio** (QA-058) | Cookie de sessão + Bearer vazio: o middleware pulava o CSRF e `current_user` caía no cookie | O CSRF só é pulado com um Bearer que traz token; `current_user` responde 401 a qualquer `Authorization` inválido, nunca cai no cookie | REQ-SEC-01 | `tests/integration/test_merchant_account_fixes.py::test_empty_bearer_does_not_skip_csrf` |
+| **Feedback em resposta de outro lojista** (QA-024) | Lojista A avalia (e polui) o `trace_id` de uma resposta do lojista B | `chat_turns` grava o dono de cada `trace_id`; `POST /v1/feedback` só aceita trace do próprio usuário (404 nos demais) | REQ-OBS-05, REQ-SEC-03 | `tests/contract/test_feedback.py::test_feedback_on_another_merchants_trace_is_not_found` |
+| **Cabeçalhos de segurança ausentes na SPA** (QA-029..035) | `add_header` dentro de `location` apagava CSP, `X-Frame-Options`, `nosniff` e `Referrer-Policy` em `/`, `/assets/`, `/healthz` | Nenhum `location` usa `add_header`; cache via `expires`, tipo via `default_type` | FR-012 | `tests/test_nginx_conf.py` |
+| **Mapa da API exposto** (QA-028) | `/docs`, `/redoc` e `/openapi.json` abertos | Desligados com `APP_ENV=production`; a porta 8000 só em `127.0.0.1` no compose | REQ-SEC-05 | `tests/unit/test_api_docs_exposure.py` |
 
 ## 4. Riscos aceitos
 
 | Risco | Por que aceito | Evolução |
 | --- | --- | --- |
 | JWT HS256 com segredo compartilhado | Serviço único, sem IdP real | RS256 + JWKS com IdP |
-| Rate limit em janela fixa permite rajada na virada do minuto | Simples; limite ainda bloqueia abuso contínuo | Sliding window em Lua |
+| `X-Real-IP` forjável por quem fala direto com a porta 8000 (QA-059) | Porta 8000 só em `127.0.0.1`; o limite por e-mail não depende do IP | Lista de proxies confiáveis |
 | Circuit breaker em memória por processo | Poucas réplicas no desafio | Estado em Redis |
 | DuckDuckGo sem SLA | Escolha do usuário; cache + degradação honesta | Provedor com SLA |

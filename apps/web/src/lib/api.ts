@@ -10,7 +10,11 @@
 const JSON_HEADERS = { "Content-Type": "application/json", Accept: "application/json" };
 
 export type ApiErrorBody = {
-  error?: { code?: string; message?: string };
+  error?: {
+    code?: string;
+    message?: string;
+    details?: { loc?: (string | number)[]; type?: string }[];
+  };
   trace_id?: string;
 };
 
@@ -109,6 +113,15 @@ export const api = {
     return request<T>("DELETE", path, body, init);
   },
 };
+
+/** True when a 422 points at this body field (e.g. `email`), so the form can mark it. */
+export function isFieldError(err: unknown, field: string): boolean {
+  return (
+    isApiError(err) &&
+    err.status === 422 &&
+    (err.body?.error?.details ?? []).some((d) => (d.loc ?? []).includes(field))
+  );
+}
 
 export function isApiError(value: unknown): value is ApiError {
   return value instanceof ApiError;

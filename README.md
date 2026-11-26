@@ -8,10 +8,10 @@ passam por um fluxo de handoff com retomada humana. **Toda operação roda via `
 na própria máquina — não há dependência de Python ou `make` no host.**
 
 > **Status**: spec **001** (multi-agent) com 179 de 180 tasks fechadas e spec **002-web-ui** com
-> 97 de 105; as 9 abertas são testes que faltam, listados em
-> [docs/limitations.md](docs/limitations.md) §7. Testes: **628** no backend (pytest: 331 de
-> unidade, 36 de contrato, 141 de integração, 103 de segurança, 17 de repositório/infra), **67** no
-> frontend (Vitest) e **17** E2E (Playwright contra a stack real). Golden set com LLM real: rota
+> 98 de 105; as 8 abertas são testes que faltam, listados em
+> [docs/limitations.md](docs/limitations.md) §7. Testes: **654** no backend (pytest: 347 de
+> unidade, 37 de contrato, 146 de integração, 104 de segurança, 20 de repositório/infra; 653
+> passam e 1 é pulado), **79** no frontend (Vitest) e **19** E2E (Playwright contra a stack real). Golden set com LLM real: rota
 > exata **88,3%** de média em 3 passagens, abaixo do gate de 95% — causa e números em
 > [docs/reports/eval.md](docs/reports/eval.md). Quadros em
 > [specs/001-multi-agent-support/tasks.md](specs/001-multi-agent-support/tasks.md) e
@@ -94,13 +94,13 @@ teste consegue chamar a OpenAI ou o site da Getnet por acidente.
 
 | Camada | O que prova | Quantidade | Onde |
 |---|---|---|---|
-| Unidade | regras puras: `decide` do supervisor, máscara de PII, heurísticas do guardrail, chunking, RRF, checagem do eval, canal de eventos | 331 | `tests/unit/` |
-| Contrato | formato de `/v1/chat` e `/v1/chat/stream`, idempotência, validação, fuzz de payload | 36 | `tests/contract/` |
-| Integração do grafo | grafo, Postgres e Redis reais, com **LLM fake determinístico** | 141 | `tests/integration/` |
-| Segurança | IDOR, CSRF, RBAC, injeção direta/indireta/identidade, PII em logs e spans, limites | 103 | `tests/security/` |
-| Repositório/infra | Dockerfile, compose, observabilidade, coerência docs ↔ código, sem stubs | 17 | `tests/*.py` |
-| Frontend | componentes e hooks da SPA (Vitest + Testing Library) | 67 | `apps/web/src/**/*.test.ts(x)` |
-| E2E da UI | navegador contra a stack real (web, api, Postgres, Redis, Mailpit); só o LLM roteirizado | 17 | `apps/web/e2e/` |
+| Unidade | regras puras: `decide` do supervisor, máscara de PII, heurísticas do guardrail, chunking, RRF, checagem do eval, canal de eventos | 347 | `tests/unit/` |
+| Contrato | formato de `/v1/chat` e `/v1/chat/stream`, idempotência, validação, fuzz de payload | 37 | `tests/contract/` |
+| Integração do grafo | grafo, Postgres e Redis reais, com **LLM fake determinístico** | 146 | `tests/integration/` |
+| Segurança | IDOR, CSRF, RBAC, injeção direta/indireta/identidade, PII em logs e spans, limites | 104 | `tests/security/` |
+| Repositório/infra | Dockerfile, compose, observabilidade, coerência docs ↔ código, sem stubs, nginx | 20 | `tests/*.py` |
+| Frontend | componentes e hooks da SPA (Vitest + Testing Library) | 79 | `apps/web/src/**/*.test.ts(x)` |
+| E2E da UI | navegador contra a stack real (web, api, Postgres, Redis, Mailpit); só o LLM roteirizado | 19 | `apps/web/e2e/` |
 | Eval com LLM real | golden set de 21 cenários, 3 passagens, rota exata | manual | [docs/reports/eval.md](docs/reports/eval.md) |
 
 **Por que fakes** ([ADR 0006](docs/adr/0006-llm-fake-em-ci.md)): o modelo real não é
@@ -346,13 +346,19 @@ juiz online < 0,7 em 1 h. Detalhes e comandos de validação em
 
 ## Carga
 
+O rate limit é de 30 mensagens por minuto **por usuário**: os 20 usuários virtuais precisam de
+20 tokens diferentes (`AUTH_TOKENS`, separados por vírgula). Com um token só, quase todas as
+iterações viram 429 e o threshold de erro reprova a corrida (QA-088). A receita que cria os 20
+usuários de carga e emite os tokens está em
+[docs/reports/load-test.md](docs/reports/load-test.md#rodar-localmente); a corrida em si é:
+
 ```bash
-export K6_AUTH_TOKEN=$(docker compose run --rm api python scripts/issue_token.py cliente1988 --role merchant)
-docker compose --profile load run --rm k6 run /scripts/chat.js
+docker compose --profile load run --rm -e AUTH_TOKENS="${TOKENS}" k6 run /scripts/chat.js
 ```
 
-Thresholds de bloqueio: p95 simples < 8 s, composto < 15 s, erros < 1 %. Detalhes em
-[docs/reports/load-test.md](docs/reports/load-test.md).
+Thresholds de bloqueio: p95 simples < 8 s, composto < 15 s, erros < 1 %. Na rodada do QA
+independente (2026-11-26, 20 usuários × 5 min, `gpt-4o-mini`) o p95 ficou em 17,7 s (simples) e
+18,4 s (composto), acima da meta: ver [docs/limitations.md](docs/limitations.md) §11.
 
 ---
 
@@ -537,7 +543,7 @@ curl -s http://localhost:8000/v1/chat \
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
-# → 628 passed (backend). Frontend: run --rm web-tests (67); E2E: run --rm web-e2e (17).
+# → 653 passed, 1 skipped (backend). Frontend: run --rm web-tests (79); E2E: run --rm web-e2e (19).
 ```
 
 ### 8. Usar a UI web
@@ -567,10 +573,14 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
 - Golden set com LLM real: rota exata **88,3%** de média, abaixo do gate de 95%; o supervisor
   roteia certo, mas perguntas sem base (taxas do Pix PJ, do crediário) escalam para humano.
 - Retrieval: recall@5 de 0,798 no conjunto rotulado, abaixo da meta de 0,90, sem holdout.
-- O classificador de entrada barra 16 de 34 frases legítimas com o modelo real (bloqueia os 38
+- O classificador de entrada barra 12 de 34 frases legítimas da suíte (a maioria com CPF/CNPJ) e 2
+  de 32 frases do QA independente com o modelo real (bloqueia os 38
   ataques) e libera a pergunta se o LLM falhar (fail-open, compensado pela
   identidade só no token e pelo guardrail de saída).
-- Rate limit em janela fixa e circuit breaker por processo; alguns testes planejados não existem.
+- Circuit breaker por processo; alguns testes planejados não existem.
+- Latência com o modelo real acima do SLO (p95 de 17,7 s com 20 usuários no QA independente).
+- Respostas do QA independente (2026-11-26), achado por achado:
+  [docs/reports/qa-e2e-resposta.md](docs/reports/qa-e2e-resposta.md).
 
 Lista completa, com causa e caminho de evolução: [docs/limitations.md](docs/limitations.md).
 

@@ -9,6 +9,12 @@ export type SessionAccount = {
   display_name: string;
 };
 
+/** Where each role starts: the merchant chats, the operator works the queue, the admin
+ * administers. Sending everyone to /chat showed "access denied" to operators and admins. */
+export function homeFor(role: Role): string {
+  return role === "merchant" ? "/chat" : role === "operator" ? "/queue" : "/admin";
+}
+
 /**
  * One query per app lifetime: the server identifies the account from the HttpOnly cookie,
  * so the SPA never carries identity in state. On 401 we return `null` so guards redirect.

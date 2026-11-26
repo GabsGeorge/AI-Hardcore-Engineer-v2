@@ -6,6 +6,11 @@ Resultados reais contra a stack no compose, com o modelo real (`gpt-4o-mini` + `
 `RAG_STRATEGY=dense` (limiar 0,40), sem reranker, `CONFIDENCE_REPLAN=0,70` e `CONFIDENCE_ESCALATE_HARD=0,40`.
 Nenhum piso de confiança, nenhuma exceção "knowledge-only" no supervisor e nenhum atalho no grounding.
 
+> **2026-11-26**: depois do QA independente, os guardrails de entrada e saída e o agente de suporte
+> mudaram (QA-005, QA-006, QA-014, QA-015). A rodada desta página é anterior a isso; a
+> revalidação dos casos do QA com o modelo real está em [qa-e2e-resposta.md](qa-e2e-resposta.md).
+> O golden set completo não foi rodado de novo nesta revisão.
+
 > **Auditoria 2026-11-24**: conferido contra o código — padrões `RAG_STRATEGY=dense`,
 > `RAG_DENSE_THRESHOLD=0.40`, `CONFIDENCE_REPLAN=0.70`, `CONFIDENCE_ESCALATE_HARD=0.40`
 > (`src/app/core/config.py`), `SKIP_RERANKER=1` no compose, `CONTROL_RUNS` em

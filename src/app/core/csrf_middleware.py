@@ -29,7 +29,11 @@ def _needs_csrf(request: Request) -> bool:
     if request.method not in _UNSAFE_METHODS:
         return False
     auth = request.headers.get("authorization", "")
-    if auth.lower().startswith("bearer "):
+    scheme, _, token = auth.partition(" ")
+    # Only a Bearer that actually carries a token skips the check: with an empty one
+    # ("Authorization: Bearer ") current_user fell back to the cookie, and the cookie request
+    # went through without X-CSRF-Token (QA-058). current_user now rejects that header too.
+    if scheme.lower() == "bearer" and token.strip():
         return False
     # Only enforce when the request is actually cookie-authed. Pre-auth endpoints
     # (register, login, password reset, invite accept) have no session cookie yet.

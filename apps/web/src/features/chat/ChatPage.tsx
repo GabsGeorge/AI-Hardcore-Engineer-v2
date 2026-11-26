@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Button, Input, useLiveAnnouncer } from "@/design";
 import { api } from "@/lib/api";
 import { streamPost } from "@/lib/sse";
@@ -9,8 +9,17 @@ import { MessageList } from "./MessageList";
 import type { ChatMessage, ChatResponseBody, HandoffRef } from "./types";
 import { useConversationEvents } from "./useConversationEvents";
 
+/** Mesmo limite do backend (ChatRequest.message, max_length=4000). */
+export const MAX_MESSAGE_CHARS = 4000;
+
 /** Espera padrão quando o 429 vem sem `Retry-After` utilizável. */
 const DEFAULT_RETRY_SECONDS = 60;
+
+/** HTTP status of a failed stream (`SseHttpError` carries it as `sse_http_<status>`). */
+function streamStatus(err: unknown): number | undefined {
+  const match = err instanceof Error ? /^sse_http_(\d{3})$/.exec(err.message) : null;
+  return match ? Number(match[1]) : undefined;
+}
 
 function retryAfterSeconds(err: unknown): number {
   const value = (err as { retryAfterSeconds?: unknown } | null)?.retryAfterSeconds;
@@ -20,14 +29,26 @@ function retryAfterSeconds(err: unknown): number {
 type ConversationLoad = {
   conversation_id: string;
   handoff: HandoffRef;
-  messages: { role: "user" | "assistant"; content: string }[];
+  messages: {
+    role: "user" | "assistant";
+    content: string;
+    trace_id?: string | null;
+    sources?: ChatResponseBody["sources"];
+  }[];
 };
+
+type ChatErrorKey =
+  | "chat.errors.interrupted"
+  | "chat.errors.generic"
+  | "chat.errors.notLinked"
+  | "chat.errors.invalid";
 
 export function ChatPage() {
   const { t } = useTranslation();
   const announce = useLiveAnnouncer();
   const params = useParams<{ id?: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState(false);
@@ -100,8 +121,8 @@ export function ChatPage() {
                   role: "assistant" as const,
                   content: m.content,
                   agentSteps: [],
-                  sources: [],
-                  traceId: `h-${params.id}-${i}`,
+                  sources: m.sources ?? [],
+                  traceId: m.trace_id ?? `h-${params.id}-${i}`,
                 }
               : { id: `h-${params.id}-${i}`, role: "user" as const, content: m.content },
           ),
@@ -139,7 +160,7 @@ export function ChatPage() {
       // Sem o evento `done` não há resposta: o servidor pode fechar o fluxo no meio ou devolver
       // erro. Antes isso só desligava o "pensando" e a pergunta ficava sem resposta nem aviso.
       let completed = false;
-      const showError = (key: "chat.errors.interrupted" | "chat.errors.generic") => {
+      const showError = (key: ChatErrorKey) => {
         setMessages((previous) => [
           ...previous,
           { id: `e-${Date.now()}`, role: "error", content: t(key) },
@@ -204,6 +225,21 @@ export function ChatPage() {
         if (controller.signal.aborted) {
           return;
         }
+        if (streamStatus(err) === 401) {
+          // Sessão expirada ou encerrada em outro lugar: volta ao login e retorna para cá
+          // depois, em vez de repetir "tente de novo" a cada envio (QA-040).
+          const next = encodeURIComponent(`${location.pathname}${location.search}`);
+          navigate(`/login?next=${next}&expired=1`, { replace: true });
+          return;
+        }
+        if (streamStatus(err) === 409) {
+          showError("chat.errors.notLinked");
+          return;
+        }
+        if (streamStatus(err) === 422) {
+          showError("chat.errors.invalid");
+          return;
+        }
         if (err instanceof Error && err.message === "sse_http_429") {
           // Espera o que o servidor mandou em Retry-After; 60 s só quando o header falta.
           const seconds = retryAfterSeconds(err);
@@ -215,7 +251,7 @@ export function ChatPage() {
         showError(completed ? "chat.errors.interrupted" : "chat.errors.generic");
       }
     },
-    [announce, conversationId, t],
+    [announce, conversationId, location.pathname, location.search, navigate, t],
   );
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -229,6 +265,16 @@ export function ChatPage() {
   }
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // O campo fica desabilitado enquanto a resposta chega, e o foco cai no <body>; devolve o foco
+  // ao campo quando a resposta termina, para quem usa teclado seguir digitando (QA-071).
+  const wasPending = useRef(false);
+  useEffect(() => {
+    if (wasPending.current && !pending) {
+      document.getElementById("chat-input")?.focus();
+    }
+    wasPending.current = pending;
+  }, [pending]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -245,6 +291,8 @@ export function ChatPage() {
           id="chat-input"
           value={input}
           onChange={(event) => setInput(event.target.value)}
+          maxLength={MAX_MESSAGE_CHARS}
+          aria-describedby="chat-input-limit"
           placeholder={
             handoffLocked ? t("chat.handoffLockPlaceholder") : t("chat.inputPlaceholder")
           }
@@ -256,6 +304,14 @@ export function ChatPage() {
           {t("chat.send")}
         </Button>
       </form>
+      <p id="chat-input-limit" className="sr-only">
+        {t("chat.maxLength", { max: MAX_MESSAGE_CHARS })}
+      </p>
+      {input.length >= MAX_MESSAGE_CHARS ? (
+        <p className="text-label text-state-warning" role="status">
+          {t("chat.maxLength", { max: MAX_MESSAGE_CHARS })}
+        </p>
+      ) : null}
       {retryAt !== undefined ? (
         <p className="text-label text-state-warning" role="status">
           {t("chat.rateLimited", { seconds: retrySeconds })}

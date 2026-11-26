@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Alert, Spinner, StatusBadge } from "@/design";
 import { MessageContent } from "./MessageContent";
+import { MessageFeedback } from "./MessageFeedback";
 import { SourceList } from "./SourceList";
 import type { ChatMessage } from "./types";
 
@@ -25,7 +26,7 @@ export function MessageList({
         {messages.map((message) =>
           message.role === "user" ? (
             <li key={message.id} className="flex justify-end">
-              <div className="max-w-[80%] rounded-lg bg-surface-200 p-3 text-body text-ink-700">
+              <div className="max-w-[80%] whitespace-pre-wrap break-words rounded-lg bg-surface-200 p-3 text-body text-ink-700 [overflow-wrap:anywhere]">
                 {message.content}
               </div>
             </li>
@@ -42,10 +43,11 @@ export function MessageList({
                   ))}
                 </div>
               ) : null}
-              <div className="max-w-[80%] rounded-lg border border-line bg-surface-100 p-3 text-body text-ink-700 shadow-1">
+              <div className="max-w-[80%] break-words rounded-lg border border-line bg-surface-100 p-3 text-body text-ink-700 shadow-1 [overflow-wrap:anywhere]">
                 <MessageContent text={message.content} />
               </div>
               {message.sources.length > 0 ? <SourceList sources={message.sources} /> : null}
+              <MessageFeedback traceId={message.traceId} />
             </li>
           ),
         )}

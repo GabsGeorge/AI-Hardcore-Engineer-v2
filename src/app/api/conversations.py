@@ -59,12 +59,23 @@ async def get_conversation(
         raise not_found()
     state = await graph.aget_state(graph_config(user.id, conversation_id, request.state.trace_id))
     values: dict[str, Any] = state.values or {}
+    turns = await repo.turns_by_message(
+        get_pool(), user_id=user.id, conversation_id=conversation_id
+    )
     messages: list[ConversationMessage] = []
     for m in values.get("messages") or []:
         if isinstance(m, HumanMessage):
             messages.append(ConversationMessage(role="user", content=str(m.content)))
         elif isinstance(m, AIMessage):
-            messages.append(ConversationMessage(role="assistant", content=str(m.content)))
+            turn = turns.get(m.id or "") or {}
+            messages.append(
+                ConversationMessage(
+                    role="assistant",
+                    content=str(m.content),
+                    trace_id=turn.get("trace_id"),
+                    sources=turn.get("sources") or [],
+                )
+            )
     status: HandoffStatus = handoff_row.get("handoff_status") or "none"
     return Conversation(
         conversation_id=conversation_id,
@@ -140,7 +151,9 @@ async def conversation_events(
                 current_status = info.get("handoff_status")
                 if current_status != last_status:
                     last_status = current_status
-                    ticket = info.get("ticket_id")
+                    # Postgres returns the ticket id as a UUID; json.dumps cannot encode it, and
+                    # the TypeError ended the stream right after final_message (QA-023).
+                    ticket = str(info["ticket_id"]) if info.get("ticket_id") else None
                     yield {
                         "event": "handoff_update",
                         "id": f"handoff_update:{ticket}:{current_status or 'none'}",

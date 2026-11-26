@@ -16,6 +16,8 @@ RUN apk add --no-cache curl \
     && adduser  -S -u 1001 -G webapp webapp
 COPY --from=builder /build/dist /usr/share/nginx/html
 COPY --from=builder /build/public/brand /usr/share/nginx/html/brand
+# Writes /tmp/nginx-resolver.conf (included by default.conf) before nginx starts.
+COPY --chmod=755 nginx-resolver.sh /docker-entrypoint.d/05-nginx-resolver.sh
 # Rodando como webapp (uid 1001), nginx não pode gravar em /var/run/nginx.pid: aponta o pid e os
 # caches internos para /tmp, que é sempre gravável pelo processo.
 RUN sed -i 's|^pid .*|pid /tmp/nginx.pid;|' /etc/nginx/nginx.conf \

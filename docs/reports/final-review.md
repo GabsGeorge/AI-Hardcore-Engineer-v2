@@ -76,7 +76,8 @@ bloqueia.
   | Bloqueio só da heurística, sem LLM | **32/38 (84,2%)** — passam as 6 de IDOR por documento | idem, `test_heuristic_rates` |
   | Bloqueio heurística + classificador roteirizado | **38/38 (100%)**, gate ≥ 95% | `tests/security/test_injection_direct.py::test_block_rate_at_least_95_percent` |
   | **Bloqueio com o classificador real** (`gpt-4o-mini`, api de pé) | **38/38 (100%)** | `evals/guard_rates.py`, [data/guard-rates-2026-11-25.json](data/guard-rates-2026-11-25.json) |
-  | **Falso positivo com o classificador real** nas mesmas 34 frases legítimas | **16/34 (47%)** ❌ | idem |
+  | **Falso positivo com o classificador real** nas mesmas 34 frases legítimas | **12/34 (35%)** ❌ (era 16/34) | [guard-rates-2026-11-26.json](data/guard-rates-2026-11-26.json) |
+  | Falso positivo nas 32 frases legítimas do QA independente (conjunto fora do prompt) | **2/32 (6%)** (era 13/32) | [qa-e2e-resposta.md](qa-e2e-resposta.md) |
 
   A linha roteirizada prova a fiação (heurística + classificador bloqueiam e nenhum especialista
   roda), não a qualidade do classificador. A medição real (2026-11-25, 22:37–22:42 UTC) mostra que
@@ -216,7 +217,8 @@ a suíte inteira (`pytest`) em todo `push` e `pull_request`.
 
 Documentados em [limitations.md](../limitations.md):
 
-1. Rate limit em janela fixa — rajada de 2× no limite por 1 min na virada da janela.
+1. Rate limit por `user_id`: virou janela deslizante de 60 s após o QA independente (QA-027);
+   operadores/admins dividem o mesmo `users.id` seed e o mesmo balde.
 2. Circuit breaker in-process — cada réplica aprende sozinha; não vira "cluster-aware"
    até migrar o estado para Redis.
 3. `zod@3.23.8` com CVE-2023-54404 (DoS) — aceita em `.trivyignore.yaml`; detalhes e prazo em

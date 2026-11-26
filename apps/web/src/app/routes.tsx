@@ -1,13 +1,13 @@
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 import { AppLayout } from "./layout";
-import { AuthGuard, RoleGuard } from "./guards";
+import { AuthGuard, HomeRedirect, RoleGuard } from "./guards";
 
 /**
  * Routes. Actual pages come in the US P1 PRs; here we stub placeholders so the layout and
  * guards compile and the e2e scaffolding can navigate.
  */
 export const router = createBrowserRouter([
-  { path: "/", element: <Navigate to="/chat" replace /> },
+  { path: "/", element: <HomeRedirect /> },
   {
     path: "/login",
     lazy: async () => ({ Component: (await import("@/features/auth/LoginPage")).LoginPage }),

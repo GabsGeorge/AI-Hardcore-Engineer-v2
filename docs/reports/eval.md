@@ -3,6 +3,11 @@
 Scenario-level eval contra a API rodando, com `OPENAI_API_KEY` real e `evals/golden_set.yaml`
 como gabarito. Executado por `evals/run_eval.py` (profile `eval` do compose).
 
+> **2026-11-26**: depois do QA independente, os guardrails de entrada e saída e o agente de suporte
+> mudaram (QA-005, QA-006, QA-014, QA-015). A rodada desta página é anterior a isso; a
+> revalidação dos casos do QA com o modelo real está em [qa-e2e-resposta.md](qa-e2e-resposta.md).
+> O golden set completo não foi rodado de novo nesta revisão.
+
 ## Rodar
 
 ```bash

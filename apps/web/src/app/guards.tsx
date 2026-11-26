@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Alert, Spinner } from "@/design";
-import { useSession, type Role } from "./session";
+import { homeFor, useSession, type Role } from "./session";
 
 export function AuthGuard() {
   const { t } = useTranslation();
@@ -15,6 +15,16 @@ export function AuthGuard() {
     return <Navigate to={`/login?next=${encodeURIComponent(next)}`} replace />;
   }
   return <Outlet />;
+}
+
+/** `/`: each role lands on its own start page (needs a session; else the login). */
+export function HomeRedirect() {
+  const { t } = useTranslation();
+  const session = useSession();
+  if (session.isLoading) {
+    return <CenteredSpinner label={t("app.loading")} />;
+  }
+  return <Navigate to={session.data ? homeFor(session.data.role) : "/login"} replace />;
 }
 
 export function RoleGuard({ allow }: { allow: Role[] }) {

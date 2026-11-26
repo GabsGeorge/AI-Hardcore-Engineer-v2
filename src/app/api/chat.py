@@ -3,12 +3,13 @@
 state, so raw PII is never persisted in checkpoints (constitution X)."""
 
 import json
+import time
 from typing import Any, get_args
 from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Request
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.types import Overwrite
 from sse_starlette.sse import EventSourceResponse
 
@@ -19,6 +20,7 @@ from app.core.errors import AppError, forbidden
 from app.db import repo
 from app.db.pool import get_pool
 from app.guardrails.pii import mask
+from app.observability.metrics import CHAT_TURN_LATENCY
 from app.ops.online_eval import schedule_score_turn
 
 router = APIRouter()
@@ -146,6 +148,21 @@ async def _reflect_open_handoff(
     return row
 
 
+def _require_chat_identity(user: CurrentUser) -> None:
+    """Only merchants chat, and only through an establishment (``users.id``).
+
+    A web merchant account whose establishment link was removed has no ``users`` row to own the
+    conversation: say so (409) instead of failing on the conversations FK (QA-021)."""
+    if user.role != "merchant":
+        raise forbidden("role_not_allowed", "Chat is only available for merchant accounts.")
+    if user.account_id is not None and user.id == user.account_id:
+        raise AppError(
+            409,
+            "merchant_not_linked",
+            "This account is not linked to an establishment yet. Ask the administrator.",
+        )
+
+
 def _graph_or_503(request: Request) -> Any:
     graph = request.app.state.graph
     if graph is None:
@@ -153,11 +170,45 @@ def _graph_or_503(request: Request) -> Any:
     return graph
 
 
-def _schedule_eval(message: str, response: ChatResponse) -> None:
+async def _record_turn(
+    state: dict[str, Any], user_id: str, conversation_id: UUID, response: ChatResponse
+) -> None:
+    """Remember who owns this trace and what it cited, keyed by the reply's message id."""
+    last_ai = next(
+        (m for m in reversed(state.get("messages") or []) if isinstance(m, AIMessage)), None
+    )
+    await repo.record_turn(
+        get_pool(),
+        trace_id=response.trace_id,
+        user_id=user_id,
+        conversation_id=conversation_id,
+        message_id=last_ai.id if last_ai is not None else None,
+        sources=[s.model_dump(mode="json") for s in response.sources],
+    )
+
+
+_JUDGE_EVIDENCE_CHARS = 8000
+
+
+def judge_sources(state: dict[str, Any], response: ChatResponse) -> str:
+    """What the online judge reads as "sources": the passages and account data the answer was
+    built from, not only titles and URLs. With titles alone the judge could verify nothing and
+    scored faithfulness ~0.25 on correct answers (QA-042). Bounded, so one turn never sends a
+    huge prompt."""
+    lines = [f"- [{s.kind}] {s.title} — {s.url}" for s in response.sources]
+    for result in state.get("results") or []:
+        if result.get("error"):
+            continue
+        lines.extend(result.get("evidence") or [])
+    return "\n\n".join(lines)[:_JUDGE_EVIDENCE_CHARS]
+
+
+def _schedule_eval(message: str, response: ChatResponse, state: dict[str, Any]) -> None:
     if response.guardrails.input == "blocked":
         return
-    sources = "\n".join(f"- [{s.kind}] {s.title} — {s.url}" for s in response.sources)
-    schedule_score_turn(mask(message)[0], response.response, sources, response.trace_id)
+    schedule_score_turn(
+        mask(message)[0], response.response, judge_sources(state, response), response.trace_id
+    )
 
 
 @router.post("/v1/chat", response_model=ChatResponse)
@@ -168,8 +219,8 @@ async def chat(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> ChatResponse:
     trace_id: str = request.state.trace_id
-    if user.role != "merchant":
-        raise forbidden("role_not_allowed", "Chat is only available for merchant accounts.")
+    started = time.perf_counter()
+    _require_chat_identity(user)
     await _reject_foreign_user_id(body, user, request, trace_id)
     await check_rate_limit(request, user.id)
     body_dict = body.model_dump(mode="json", exclude_none=True)
@@ -187,10 +238,12 @@ async def chat(
     if state.get("__interrupt__"):
         await _reflect_open_handoff(state, user.id, conversation_id)
     response = build_response(state, conversation_id, trace_id)
+    await _record_turn(state, user.id, conversation_id, response)
     await idempotency_store(
         request, user.id, idempotency_key, body_dict, response.model_dump(mode="json")
     )
-    _schedule_eval(body.message, response)
+    _schedule_eval(body.message, response, state)
+    CHAT_TURN_LATENCY.labels("/v1/chat").observe(time.perf_counter() - started)
     return response
 
 
@@ -200,8 +253,8 @@ async def chat_stream(
 ) -> EventSourceResponse:
     """SSE variant of /v1/chat: agent_step per node, handoff, then done (contracts/events.md)."""
     trace_id: str = request.state.trace_id
-    if user.role != "merchant":
-        raise forbidden("role_not_allowed", "Chat is only available for merchant accounts.")
+    started = time.perf_counter()
+    _require_chat_identity(user)
     await _reject_foreign_user_id(body, user, request, trace_id)
     await check_rate_limit(request, user.id)
     graph = _graph_or_503(request)
@@ -231,7 +284,9 @@ async def chat_stream(
                     "data": json.dumps({"status": "awaiting_human", "ticket_id": str(row["id"])}),
                 }
         response = build_response(state, conversation_id, trace_id)
-        _schedule_eval(body.message, response)
+        await _record_turn(state, user.id, conversation_id, response)
+        _schedule_eval(body.message, response, state)
+        CHAT_TURN_LATENCY.labels("/v1/chat/stream").observe(time.perf_counter() - started)
         yield {"event": "done", "data": json.dumps(response.model_dump(mode="json"))}
 
     return EventSourceResponse(_generator())

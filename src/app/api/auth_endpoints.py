@@ -386,7 +386,9 @@ async def list_sessions(
             await conn.execute(
                 "SELECT jti, issued_at, last_seen_at, ip, user_agent FROM auth_sessions"
                 " WHERE account_id = %s AND revoked_at IS NULL ORDER BY last_seen_at DESC",
-                (user.id,),
+                # Sessions belong to the auth account (acc_*); user.id is the users.id the
+                # graph acts as, which differs once a merchant is linked (QA-060).
+                (user.account_id or user.id,),
             )
         ).fetchall()
     return [
@@ -412,7 +414,7 @@ async def revoke_others(
         current_jti = sessions._decode(cookie_value).jti  # noqa: SLF001
     except sessions.SessionError as exc:
         raise unauthorized() from exc
-    await sessions.revoke_all(get_pool(), user.id, except_jti=current_jti)
+    await sessions.revoke_all(get_pool(), user.account_id or user.id, except_jti=current_jti)
     return Response(status_code=204)
 
 

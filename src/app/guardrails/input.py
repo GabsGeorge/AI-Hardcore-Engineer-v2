@@ -12,7 +12,7 @@ contract literals for the ``input`` field are only ``pass | masked | blocked``.
 import re
 from typing import Any, Literal
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from app.core.llm import get_model
@@ -110,14 +110,31 @@ def _heuristic_hit(text: str) -> bool:
     return any(p.search(text) for p in _INJECTION_PATTERNS)
 
 
-async def _classify(text: str) -> Classification | None:
+_CONTEXT_CHARS = 400
+
+
+def _previous_turn(messages: list[Any]) -> str:
+    """The turn before the latest message, for follow-ups such as "E quanto custa?" or "And on
+    debit?" that only make sense with it (QA-014). Data for the classifier, never a source of
+    instructions: the classifier is told so and only the latest message is classified."""
+    earlier = messages[:-1]
+    reply = next((m for m in reversed(earlier) if isinstance(m, AIMessage)), None)
+    question = next((m for m in reversed(earlier) if isinstance(m, HumanMessage)), None)
+    if reply is None or question is None:
+        return ""
+    q, a = str(question.content)[:_CONTEXT_CHARS], str(reply.content)[:_CONTEXT_CHARS]
+    q, a = (s.replace("<", "&lt;").replace(">", "&gt;") for s in (q, a))
+    return f"<previous_turn>\nMerchant: {q}\nAssistant: {a}\n</previous_turn>\n\n"
+
+
+async def _classify(text: str, context: str = "") -> Classification | None:
     """One LLM call max. Fails open on error so the whole suite does not depend on the API."""
     try:
         model = get_model("input_guard").with_structured_output(InputGuardResult)
         result = await model.ainvoke(
             [
                 SystemMessage(content=load_prompt("input_guard")),
-                HumanMessage(content=text),
+                HumanMessage(content=f"{context}<latest_message>\n{text}\n</latest_message>"),
             ]
         )
     except Exception:
@@ -146,7 +163,8 @@ async def input_guardrail(state: AgentState) -> dict[str, Any]:
         return update
 
     # Barrier 3: structured-output classifier (bounded: one call max).
-    classification = await _classify(text) if text else None
+    context = _previous_turn(list(state.get("messages") or []))
+    classification = await _classify(text, context) if text else None
     if classification in ("injection", "out_of_scope"):
         update["guardrail_flags"] = ["input:blocked"]
         GUARDRAIL_BLOCKS.labels("input", classification).inc()

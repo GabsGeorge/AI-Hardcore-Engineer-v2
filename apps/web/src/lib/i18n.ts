@@ -30,12 +30,20 @@ export async function initI18n(): Promise<void> {
     interpolation: { escapeValue: false },
     returnNull: false,
   });
+  if (typeof window !== "undefined") {
+    window.document.documentElement.lang = htmlLang(i18n.language as Language);
+  }
+}
+
+/** BCP 47 tag for <html lang>, so screen readers pronounce the page in the UI language. */
+export function htmlLang(lang: Language): string {
+  return lang === "en" ? "en" : "pt-BR";
 }
 
 export function setLanguage(lang: Language): void {
   void i18n.changeLanguage(lang);
   if (typeof window !== "undefined") {
     window.localStorage.setItem(STORAGE_KEY, lang);
-    window.document.documentElement.lang = lang;
+    window.document.documentElement.lang = htmlLang(lang);
   }
 }

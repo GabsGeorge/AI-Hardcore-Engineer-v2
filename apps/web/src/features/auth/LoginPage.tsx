@@ -5,6 +5,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { Alert, Button, FormField, Input, Logo, PasswordInput } from "@/design";
 import { api, isApiError } from "@/lib/api";
+import { homeFor } from "@/app/session";
 
 const Schema = z.object({
   email: z.string().email(),
@@ -19,7 +20,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const client = useQueryClient();
   const [params] = useSearchParams();
-  const next = params.get("next") ?? "/chat";
+  const next = params.get("next");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [emailError, setEmailError] = useState<string | undefined>();
@@ -30,7 +31,7 @@ export function LoginPage() {
     mutationFn: async (body: LoginBody) => api.post<{ account: Account }>("/v1/auth/login", body),
     onSuccess: ({ account }) => {
       client.setQueryData(["session"], account);
-      navigate(next, { replace: true });
+      navigate(next ?? homeFor(account.role), { replace: true });
     },
     onError: (err) => {
       if (!isApiError(err)) {
@@ -68,6 +69,9 @@ export function LoginPage() {
         <h1 className="text-display text-ink-900">{t("auth.signInTitle")}</h1>
         <p className="text-body text-ink-500">{t("auth.signInSubtitle")}</p>
       </header>
+      {params.get("expired") === "1" && !bannerKey ? (
+        <Alert tone="info">{t("auth.sessionExpired")}</Alert>
+      ) : null}
       {bannerKey ? (
         <Alert tone="danger">{t(bannerKey, { seconds: retrySeconds ?? "" })}</Alert>
       ) : null}

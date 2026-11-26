@@ -45,12 +45,13 @@ async def list_audit_events(
     *,
     action: str | None = None,
     since: datetime | None = None,
+    before_id: int | None = None,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     """Reads `audit_events` for the admin audit view. ``actor_id`` already carries the
     pseudonym when the account has been deleted (``deleted:*``); the response does not need
     further scrubbing because every write goes through ``insert_audit_event``'s ``_scrub``."""
-    sql = "SELECT ts, actor_id, actor_role, action, target, outcome, trace_id FROM audit_events"
+    sql = "SELECT id, ts, actor_id, actor_role, action, target, outcome, trace_id FROM audit_events"
     args: list[Any] = []
     clauses: list[str] = []
     if action is not None:
@@ -59,9 +60,12 @@ async def list_audit_events(
     if since is not None:
         clauses.append("ts >= %s")
         args.append(since)
+    if before_id is not None:  # next page: events older than the last one shown (QA-065)
+        clauses.append("id < %s")
+        args.append(before_id)
     if clauses:
         sql += " WHERE " + " AND ".join(clauses)
-    sql += " ORDER BY ts DESC LIMIT %s"
+    sql += " ORDER BY id DESC LIMIT %s"
     args.append(limit)
     async with pool.connection() as conn:
         rows = await (await conn.execute(sql, tuple(args))).fetchall()
@@ -211,6 +215,15 @@ async def list_handoffs(
         return list(await cur.fetchall())
 
 
+async def get_merchant_name(pool: Pool, user_id: str) -> str | None:
+    """Trade name of the establishment, for the operator's ticket view."""
+    async with pool.connection() as conn:
+        row = await (
+            await conn.execute("SELECT trade_name FROM merchants WHERE user_id = %s", (user_id,))
+        ).fetchone()
+    return row["trade_name"] if row else None
+
+
 async def get_handoff(pool: Pool, ticket_id: UUID) -> dict[str, Any] | None:
     async with pool.connection() as conn:
         cur = await conn.execute("SELECT * FROM handoffs WHERE id = %s", (ticket_id,))
@@ -323,6 +336,51 @@ async def delete_user_data(pool: Pool, user_id: str, *, pseudonym: str) -> dict[
         "feedback": del_fb.rowcount or 0,
         "audit_events_pseudonymized": pseudo.rowcount or 0,
     }
+
+
+# --- Chat turns ---------------------------------------------------------------------------
+async def record_turn(
+    pool: Pool,
+    *,
+    trace_id: str,
+    user_id: str,
+    conversation_id: UUID,
+    message_id: str | None,
+    sources: list[dict[str, Any]],
+) -> None:
+    """Owner and sources of an answered turn (QA-024 feedback ownership, QA-041 reopen)."""
+    async with pool.connection() as conn:
+        await conn.execute(
+            "INSERT INTO chat_turns (trace_id, user_id, conversation_id, message_id, sources)"
+            " VALUES (%s, %s, %s, %s, %s) ON CONFLICT (trace_id) DO NOTHING",
+            (trace_id, user_id, conversation_id, message_id, Jsonb(sources)),
+        )
+
+
+async def turn_belongs_to(pool: Pool, *, trace_id: str, user_id: str) -> bool:
+    async with pool.connection() as conn:
+        row = await (
+            await conn.execute(
+                "SELECT 1 FROM chat_turns WHERE trace_id = %s AND user_id = %s",
+                (trace_id, user_id),
+            )
+        ).fetchone()
+    return row is not None
+
+
+async def turns_by_message(
+    pool: Pool, *, user_id: str, conversation_id: UUID
+) -> dict[str, dict[str, Any]]:
+    """``message_id → {trace_id, sources}`` for the owner's conversation."""
+    async with pool.connection() as conn:
+        rows = await (
+            await conn.execute(
+                "SELECT message_id, trace_id, sources FROM chat_turns"
+                " WHERE user_id = %s AND conversation_id = %s AND message_id IS NOT NULL",
+                (user_id, conversation_id),
+            )
+        ).fetchall()
+    return {r["message_id"]: {"trace_id": r["trace_id"], "sources": r["sources"]} for r in rows}
 
 
 async def insert_feedback(

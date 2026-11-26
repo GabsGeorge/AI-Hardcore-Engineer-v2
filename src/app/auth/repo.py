@@ -251,18 +251,42 @@ async def create_merchant_for_account(
     return user_id
 
 
-async def link_merchant(pool: Pool, *, merchant_user_id: str, account_id: str) -> bool:
-    """``True`` on link; ``False`` when the merchant is already attached to another account.
+async def link_merchant(
+    pool: Pool, *, merchant_user_id: str, account_id: str
+) -> tuple[bool, str | None]:
+    """``(True, released)`` on link; ``(False, None)`` when the merchant belongs to another
+    account (or does not exist).
 
-    The unique constraint on ``merchants.account_id`` is what makes this safe (FR-021).
+    Self-registration already gives every merchant account its own demo establishment
+    (``create_merchant_for_account``), and ``merchants.account_id`` is UNIQUE (FR-021: one
+    establishment per account and vice versa). Linking the account to a seed establishment
+    therefore first releases the establishment it holds today, in the same transaction;
+    ``released`` names it (``None`` when there was none) so the caller can audit it. The
+    released row keeps its data, only ``account_id`` becomes NULL.
     """
-    async with pool.connection() as conn:
-        cur = await conn.execute(
-            "UPDATE merchants SET account_id = %s"
-            " WHERE user_id = %s AND (account_id IS NULL OR account_id = %s)",
-            (account_id, merchant_user_id, account_id),
+    async with pool.connection() as conn, conn.transaction():
+        row = await (
+            await conn.execute(
+                "SELECT account_id FROM merchants WHERE user_id = %s FOR UPDATE",
+                (merchant_user_id,),
+            )
+        ).fetchone()
+        if row is None or row["account_id"] not in (None, account_id):
+            return False, None
+        if row["account_id"] == account_id:
+            return True, None
+        held = await (
+            await conn.execute(
+                "UPDATE merchants SET account_id = NULL"
+                " WHERE account_id = %s AND user_id <> %s RETURNING user_id",
+                (account_id, merchant_user_id),
+            )
+        ).fetchone()
+        await conn.execute(
+            "UPDATE merchants SET account_id = %s WHERE user_id = %s",
+            (account_id, merchant_user_id),
         )
-    return (cur.rowcount or 0) > 0
+    return True, held["user_id"] if held else None
 
 
 async def unlink_merchant(pool: Pool, merchant_user_id: str) -> None:

@@ -392,7 +392,7 @@ histórico vazio; excluir conta e conferir login genérico.
 - [x] T079 [P] [US5] Backend regressão: `tests/integration/test_lgpd.py` (checkpoints) + `tests/integration/test_me_delete_account.py` *(o nome `test_me_delete_data.py` do plano não existe — auditoria 2026-11-24)*
       continua apagando checkpoints (correções 2 e 3 do audit da 001; não quebrou com a
       camada nova).
-- [ ] T080 [P] [US5] Playwright `apps/web/e2e/05-privacy.spec.ts`. *(auditoria 2026-11-24: não feito: não há E2E de privacidade; registrado em docs/limitations.md)*
+- [x] T080 [P] [US5] Playwright `apps/web/e2e/05-privacy.spec.ts`. *(feito em 2026-11-26 após o QA independente: apaga as conversas pela tela, confere o histórico vazio e roda o axe; a exclusão da conta fica na integração e no Vitest para não apagar a conta compartilhada dos outros specs)*
 
 ### Implementação
 
@@ -400,7 +400,9 @@ histórico vazio; excluir conta e conferir login genérico.
       [contracts/me.yaml](contracts/me.yaml): valida senha pelo mesmo caminho do login
       (sem revelar erro específico), executa `repo_auth.delete_account_cascade`, limpa
       cookies com `Max-Age=0`.
-- [x] T082 [US5] `apps/web/src/features/privacy/PrivacyPage.tsx` com duas seções
+- [x] T082 [US5] `apps/web/src/features/privacy/PrivacyPage.tsx` com duas seções *(QA independente
+      2026-11-26, QA-016: a tela entregue era um placeholder "Em construção" apesar do [x]; feita
+      agora, com `PrivacyPage.test.tsx` e `e2e/05-privacy.spec.ts`)*
       ("Apagar minhas conversas" e "Excluir minha conta") separadas visualmente; cada ação
       exige confirmação digitada e, para excluir conta, a senha atual. Resumo final mostra
       o que foi apagado e o que ficou (auditoria pseudonimizada, estabelecimento preservado).

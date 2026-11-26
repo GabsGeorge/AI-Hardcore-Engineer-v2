@@ -20,9 +20,10 @@ from app.db.migrate import migrate
 from app.db.pool import close_pool, open_pool
 from app.graph.builder import build_graph
 from app.observability.logging import configure_logging, get_logger
-from app.observability.metrics import HTTP_LATENCY, HTTP_REQUESTS
+from app.observability.metrics import HTTP_LATENCY, HTTP_REQUESTS, initialise_label_sets
 from app.observability.tracing import configure_tracing, current_trace_id, get_tracer
 from app.ops.scheduler import start as start_scheduler
+from app.tools.interfaces import TIMEOUT_SECONDS
 
 
 @asynccontextmanager
@@ -71,8 +72,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Getnet Multi-Agent Support API", version="1.0.0", lifespan=lifespan)
+    # Swagger UI, ReDoc and /openapi.json map every route and schema: useful locally and in the
+    # contract tests, not something to publish in production (QA-028). The committed contracts
+    # live in specs/*/contracts/.
+    docs = get_settings().app_env != "production"
+    app = FastAPI(
+        title="Getnet Multi-Agent Support API",
+        version="1.0.0",
+        lifespan=lifespan,
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
+    )
     install_error_handlers(app)
+    initialise_label_sets(sorted(TIMEOUT_SECONDS))
 
     # Starlette wraps middleware in reverse-registration order: the LAST added is the
     # outermost. We add enforce_csrf first and trace_requests second so trace_requests

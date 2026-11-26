@@ -17,7 +17,7 @@ from app.auth import passwords
 from app.auth import repo as auth_repo
 from app.auth import sessions as cookie_sessions
 from app.core.config import get_settings
-from app.core.errors import AppError, unauthorized
+from app.core.errors import AppError, not_found, unauthorized
 from app.db import repo
 from app.db.pool import get_pool
 
@@ -156,6 +156,10 @@ async def delete_my_account(
 async def submit_feedback(
     body: FeedbackRequest, request: Request, user: CurrentUser = Depends(current_user)
 ) -> dict[str, str]:
+    # Only an answer this user received can be rated: a trace of another merchant (or one that
+    # does not exist) is 404, the same as any resource that is not theirs (QA-024).
+    if not await repo.turn_belongs_to(get_pool(), trace_id=body.trace_id, user_id=user.id):
+        raise not_found()
     await repo.insert_feedback(
         get_pool(),
         user_id=user.id,

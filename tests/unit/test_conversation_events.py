@@ -10,7 +10,7 @@ import json
 from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
@@ -44,7 +44,8 @@ def script(monkeypatch: pytest.MonkeyPatch) -> Iterator[Script]:
         if s.cycle >= len(s.cycles):
             return None  # conversa sumiu: o gerador termina
         status, _, _ = s.current()
-        return {"handoff_status": status, "ticket_id": TICKET, "ts": ""}
+        # Como o Postgres devolve: UUID, não str (QA-023: o json.dumps quebrava com UUID).
+        return {"handoff_status": status, "ticket_id": UUID(TICKET), "ts": ""}
 
     async def latest_handoff(*_: Any) -> dict[str, Any] | None:
         return holder["s"].current()[1]

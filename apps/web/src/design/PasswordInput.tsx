@@ -1,4 +1,5 @@
 import { useState, type InputHTMLAttributes } from "react";
+import { useTranslation } from "react-i18next";
 import { Input } from "./Input";
 import { cn } from "./cn";
 
@@ -8,6 +9,7 @@ export function PasswordInput({
   className,
   ...rest
 }: { invalid?: boolean } & InputHTMLAttributes<HTMLInputElement>) {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   return (
     <div className={cn("relative", className)}>
@@ -23,7 +25,7 @@ export function PasswordInput({
         )}
         aria-pressed={visible}
       >
-        {visible ? "ocultar" : "mostrar"}
+        {visible ? t("app.hidePassword") : t("app.showPassword")}
       </button>
     </div>
   );

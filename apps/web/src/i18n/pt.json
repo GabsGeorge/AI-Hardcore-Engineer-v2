@@ -2,7 +2,11 @@
   "app": {
     "title": "Atendimento Getnet",
     "signOut": "Sair",
-    "loading": "Carregando…"
+    "loading": "Carregando…",
+    "nav": "Principal",
+    "navMobile": "Principal (celular)",
+    "showPassword": "mostrar",
+    "hidePassword": "ocultar"
   },
   "nav": {
     "chat": "Conversar",
@@ -36,8 +40,10 @@
       "credentials": "Credenciais inválidas.",
       "locked": "Muitas tentativas. Tente novamente em {{seconds}}s.",
       "rateLimited": "Muitas requisições. Tente novamente em {{seconds}}s.",
-      "weakPassword": "A senha precisa ter pelo menos 12 caracteres e não estar entre as mais usadas."
-    }
+      "weakPassword": "A senha precisa ter pelo menos 12 caracteres e não estar entre as mais usadas.",
+      "invalidEmail": "Informe um e-mail válido, como nome@empresa.com.br."
+    },
+    "sessionExpired": "Sua sessão expirou. Entre de novo para continuar de onde parou."
   },
   "chat": {
     "inputLabel": "Mensagem",
@@ -48,7 +54,9 @@
     "rateLimited": "Muitas mensagens em pouco tempo. Aguarde {{seconds}} s antes de enviar de novo.",
     "errors": {
       "interrupted": "A resposta foi interrompida antes de terminar. Envie a pergunta de novo.",
-      "generic": "Não consegui responder agora. Tente de novo em instantes."
+      "generic": "Não consegui responder agora. Tente de novo em instantes.",
+      "notLinked": "Sua conta ainda não está vinculada a um estabelecimento. Peça ao administrador para fazer o vínculo.",
+      "invalid": "Não consegui enviar essa mensagem. Confira o texto (até 4.000 caracteres) e tente de novo."
     },
     "handoffLockPlaceholder": "Aguardando atendente responder…",
     "handoffLockHint": "Enquanto o chamado está em atendimento humano, novas mensagens ficam bloqueadas.",
@@ -61,6 +69,14 @@
       "resolvedBody": "Um atendente respondeu seu chamado.",
       "expiredTitle": "Atendimento encerrado",
       "expiredBody": "Não conseguimos atender a tempo. Se ainda precisar, envie uma nova mensagem."
+    },
+    "maxLength": "Limite de {{max}} caracteres por mensagem.",
+    "feedback": {
+      "label": "Avalie esta resposta",
+      "up": "👍 Útil",
+      "down": "👎 Não ajudou",
+      "thanks": "Obrigado pela avaliação.",
+      "error": "Não foi possível registrar a avaliação."
     }
   },
   "privacy": {
@@ -120,7 +136,6 @@
     "title": "Detalhe do chamado",
     "loading": "Abra o chamado pela fila para carregar o contexto.",
     "summary": "Resumo",
-    "context": "Contexto",
     "pendingAction": "Ação pendente",
     "pendingActionBody": "O lojista pediu uma ação que precisa de decisão do operador: {{type}}.",
     "decisionLegend": "Decisão sobre a ação pendente",
@@ -132,7 +147,14 @@
     "send": "Enviar resposta",
     "sent": "Resposta enviada.",
     "alreadyClosed": "Este chamado já foi encerrado.",
-    "sendError": "Não foi possível enviar. Tente novamente."
+    "sendError": "Não foi possível enviar. Tente novamente.",
+    "merchant": "Lojista",
+    "merchantUnknown": "Lojista não identificado",
+    "conversation": "Últimas mensagens",
+    "noMessages": "Sem mensagens registradas neste chamado.",
+    "fromMerchant": "Lojista",
+    "fromAssistant": "Assistente",
+    "route": "Rota interna do atendimento"
   },
   "admin": {
     "home": {
@@ -212,7 +234,13 @@
       "columnTrace": "Trace",
       "pseudonymised": "lojista pseudonimizado",
       "emptyTitle": "Nenhum evento",
-      "emptyBody": "Ajuste os filtros."
+      "emptyBody": "Ajuste os filtros.",
+      "loadMore": "Carregar mais",
+      "outcome": {
+        "allowed": "permitido",
+        "denied": "negado",
+        "error": "erro"
+      }
     },
     "invite": {
       "title": "Aceitar convite",

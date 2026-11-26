@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, EmptyState, Spinner, StatusBadge } from "@/design";
 import { api } from "@/lib/api";
 import type { HandoffRow } from "./types";
+import { merchantLabel } from "./TicketContext";
 
 type QueueResponse = { items: HandoffRow[] };
 
@@ -59,7 +60,12 @@ export function QueuePage() {
                   </div>
                   <SlaCountdown slaDueAt={item.sla_due_at} />
                 </div>
-                <p className="mt-2 line-clamp-2 text-body text-ink-700">{item.summary}</p>
+                {merchantLabel(item.context) ? (
+                  <p className="mt-2 text-label font-semibold text-ink-500">
+                    {merchantLabel(item.context)}
+                  </p>
+                ) : null}
+                <p className="mt-1 line-clamp-2 text-body text-ink-700">{item.summary}</p>
               </Card>
             </button>
           </li>
