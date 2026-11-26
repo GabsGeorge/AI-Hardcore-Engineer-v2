@@ -10,6 +10,7 @@ Confidence = min(self-assessment, objective signal) (research R-07).
 """
 
 import asyncio
+import re
 from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -138,8 +139,37 @@ def _cited(reply: KnowledgeAnswer, count: int) -> list[int]:
     return valid or list(range(count))
 
 
-def _unique(sources: list[Source]) -> list[Source]:
-    return list({s["url"]: s for s in sources}.values())
+_MARKER = re.compile(r"\[(\d{1,3})\]")
+_REPEATED_MARKER = re.compile(r"(\[\d{1,3}\])(?:\s*\1)+")
+
+
+def renumber_citations(
+    answer: str, item_sources: list[Source], cited: list[int]
+) -> tuple[str, list[Source]]:
+    """Citation markers point at the numbered passages the model saw, several of which may come
+    from the same page; the merchant sees one entry per page. The source list is rebuilt from the
+    markers in the order they first appear (then the remaining ``cited`` items), one entry per
+    URL, and every marker is renumbered to its entry, so ``[n]`` is always the n-th listed source
+    (QA-017). A marker outside the passages is dropped instead of pointing at nothing."""
+    order: list[str] = []
+    by_url: dict[str, Source] = {}
+
+    def position(index: int) -> int:
+        source = item_sources[index]
+        if source["url"] not in by_url:
+            by_url[source["url"]] = source
+            order.append(source["url"])
+        return order.index(source["url"]) + 1
+
+    def replace(match: re.Match[str]) -> str:
+        n = int(match.group(1))
+        return f"[{position(n - 1)}]" if 1 <= n <= len(item_sources) else ""
+
+    text = _MARKER.sub(replace, answer)
+    for index in cited:
+        position(index)
+    text = _REPEATED_MARKER.sub(r"\1", text)
+    return text, [by_url[url] for url in order]
 
 
 async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict[str, Any]:
@@ -226,19 +256,22 @@ async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict
         tokens += used
         if reply is None:
             return done(error="model_error")
-        kb_sources: list[Source] = [
+        kb_items: list[Source] = [
             {
-                "title": relevant[i].title,
-                "url": relevant[i].url,
+                "title": h.title,
+                "url": h.url,
                 "kind": "kb",
-                "retrieved_at": relevant[i].fetched_at.isoformat(),
+                "retrieved_at": h.fetched_at.isoformat(),
             }
-            for i in _cited(reply, len(relevant))
+            for h in relevant
         ]
+        kb_answer, kb_sources = renumber_citations(
+            reply.answer, kb_items, _cited(reply, len(relevant))
+        )
         return done(
-            reply.answer,
+            kb_answer,
             min(reply.confidence, relevant[0].score),
-            _unique(kb_sources),
+            kb_sources,
             evidence=[f"{header}\n{text}" for header, text in items],
         )
 
@@ -264,18 +297,21 @@ async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict
     tokens += used
     if reply is None:
         return done(error="model_error")
-    web_sources: list[Source] = [
+    web_items: list[Source] = [
         {
-            "title": results[i].title,
-            "url": results[i].url,
+            "title": r.title,
+            "url": r.url,
             "kind": "web",
-            "retrieved_at": results[i].retrieved_at.isoformat(),
+            "retrieved_at": r.retrieved_at.isoformat(),
         }
-        for i in _cited(reply, len(results))
+        for r in results
     ]
+    web_answer, web_sources = renumber_citations(
+        reply.answer, web_items, _cited(reply, len(results))
+    )
     return done(
-        reply.answer,
+        web_answer,
         reply.confidence,
-        _unique(web_sources),
+        web_sources,
         evidence=[f"{header}\n{text}" for header, text in items],
     )

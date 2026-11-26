@@ -6,6 +6,11 @@ Resultados reais contra a stack no compose, com o modelo real (`gpt-4o-mini` + `
 `RAG_STRATEGY=dense` (limiar 0,40), sem reranker, `CONFIDENCE_REPLAN=0,70` e `CONFIDENCE_ESCALATE_HARD=0,40`.
 Nenhum piso de confiança, nenhuma exceção "knowledge-only" no supervisor e nenhum atalho no grounding.
 
+> **2026-11-26**: depois do QA independente, os guardrails de entrada e saída e o agente de suporte
+> mudaram (QA-005, QA-006, QA-014, QA-015). A rodada desta página é anterior a isso; a
+> revalidação dos casos do QA com o modelo real está em [qa-e2e-resposta.md](qa-e2e-resposta.md).
+> O golden set completo não foi rodado de novo nesta revisão.
+
 > **Auditoria 2026-11-24**: conferido contra o código — padrões `RAG_STRATEGY=dense`,
 > `RAG_DENSE_THRESHOLD=0.40`, `CONFIDENCE_REPLAN=0.70`, `CONFIDENCE_ESCALATE_HARD=0.40`
 > (`src/app/core/config.py`), `SKIP_RERANKER=1` no compose, `CONTROL_RUNS` em
@@ -31,7 +36,7 @@ docker compose --profile eval run --rm eval            # golden set
 |---|---|
 | Cenários do enunciado (10 × PT + 10 × EN) | **19/20 limpos** em uma passagem (resposta no idioma da pergunta, sem escalar, guardrails `pass/pass`) |
 | Perguntas de controle (3 + 1 extra, 5 execuções cada) | **20/20 seguras**: nenhuma resposta inventada, nenhuma falha interna; C2 corrigiu a premissa com a taxa real em 4/5 |
-| Golden set — acurácia de rota | **20/20 (100%)**, gate de 95% atendido; tools 5/5, handoff 3/3, guardrails 2/2 |
+| Golden set — acurácia de rota | **20/20 (100%)** em 17/11 com a regra antiga (subconjunto). Com a rota **exata** (2026-11-25, 3 passagens): **88,3% média, 85% mínimo**, abaixo do gate — ver [eval.md](eval.md) |
 | Golden set — PII | **1/1** (`sc-16` estabilizado depois da passagem de cenários; veja "Pendências") |
 
 **O resultado por pergunta não é determinístico.** Nesta passagem a pergunta não limpa foi: `09/pt`: grounding barrou.
@@ -143,7 +148,8 @@ negativa sobre a empresa ("A Getnet não aceita X") sem fonte que a diga é bloq
 
 ## Golden set (`evals/golden_set.yaml`, 21 cenários)
 
-Mesma passagem dos números acima; detalhe por cenário em [eval.md](eval.md).
+Números da passagem de 17/11, com a checagem antiga de rota por subconjunto. O run de 2026-11-25
+com a rota exata (88,3% de média, saída bruta versionada) está em [eval.md](eval.md).
 
 ```
 route       20/20

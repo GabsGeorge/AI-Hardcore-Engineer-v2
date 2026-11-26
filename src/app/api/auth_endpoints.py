@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.api.auth import CurrentUser
 from app.api.auth import current_user as current_user_dep
+from app.api.auth_limits import check_auth_flow_limit
 from app.auth import csrf as csrf_tokens
 from app.auth import login_rate, one_time_tokens, passwords, repo, sessions
 from app.core.errors import AppError, unauthorized
@@ -128,8 +129,10 @@ async def register(body: RegisterRequest, request: Request) -> GenericPending:
     """Autocadastro só cria lojista; operador/admin saem do convite admin (FR-001).
 
     Reutiliza a mesma resposta para e-mail novo e existente (FR-004); o pedido ``duplicate``
-    ainda vira linha de auditoria para análise forense.
+    ainda vira linha de auditoria para análise forense. Limite por IP e por e-mail antes de
+    qualquer consulta (E2), com a mesma resposta 429 para e-mail novo e existente.
     """
+    await check_auth_flow_limit(request, "register", ip=_client_ip(request), email=body.email)
     pool = get_pool()
     try:
         passwords.check_strength(body.password)
@@ -301,6 +304,8 @@ async def logout(request: Request, response: Response) -> Response:
 
 @router.post("/password/reset-request", status_code=202, response_model=GenericPending)
 async def reset_request(body: ResetRequest, request: Request) -> GenericPending:
+    # Antes de olhar se a conta existe: o 429 não pode revelar cadastro (E2, FR-004).
+    await check_auth_flow_limit(request, "reset_request", ip=_client_ip(request), email=body.email)
     pool = get_pool()
     account = await repo.get_account_by_email(pool, body.email)
     if account is not None and account.status != "deactivated":
@@ -381,7 +386,9 @@ async def list_sessions(
             await conn.execute(
                 "SELECT jti, issued_at, last_seen_at, ip, user_agent FROM auth_sessions"
                 " WHERE account_id = %s AND revoked_at IS NULL ORDER BY last_seen_at DESC",
-                (user.id,),
+                # Sessions belong to the auth account (acc_*); user.id is the users.id the
+                # graph acts as, which differs once a merchant is linked (QA-060).
+                (user.account_id or user.id,),
             )
         ).fetchall()
     return [
@@ -407,7 +414,7 @@ async def revoke_others(
         current_jti = sessions._decode(cookie_value).jti  # noqa: SLF001
     except sessions.SessionError as exc:
         raise unauthorized() from exc
-    await sessions.revoke_all(get_pool(), user.id, except_jti=current_jti)
+    await sessions.revoke_all(get_pool(), user.account_id or user.id, except_jti=current_jti)
     return Response(status_code=204)
 
 

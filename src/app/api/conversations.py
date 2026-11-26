@@ -59,12 +59,23 @@ async def get_conversation(
         raise not_found()
     state = await graph.aget_state(graph_config(user.id, conversation_id, request.state.trace_id))
     values: dict[str, Any] = state.values or {}
+    turns = await repo.turns_by_message(
+        get_pool(), user_id=user.id, conversation_id=conversation_id
+    )
     messages: list[ConversationMessage] = []
     for m in values.get("messages") or []:
         if isinstance(m, HumanMessage):
             messages.append(ConversationMessage(role="user", content=str(m.content)))
         elif isinstance(m, AIMessage):
-            messages.append(ConversationMessage(role="assistant", content=str(m.content)))
+            turn = turns.get(m.id or "") or {}
+            messages.append(
+                ConversationMessage(
+                    role="assistant",
+                    content=str(m.content),
+                    trace_id=turn.get("trace_id"),
+                    sources=turn.get("sources") or [],
+                )
+            )
     status: HandoffStatus = handoff_row.get("handoff_status") or "none"
     return Conversation(
         conversation_id=conversation_id,
@@ -98,23 +109,56 @@ async def conversation_events(
         raise not_found()
     await _acquire_sse_slot(user.id)
 
+    graph = request.app.state.graph
+    config = graph_config(user.id, conversation_id, request.state.trace_id)
+
+    async def _ai_messages() -> list[AIMessage] | None:
+        if graph is None:
+            return None
+        try:
+            state = await graph.aget_state(config)
+        except Exception:  # noqa: BLE001 — leitura best-effort; o próximo ciclo tenta de novo
+            return None
+        return [m for m in (state.values or {}).get("messages") or [] if isinstance(m, AIMessage)]
+
     async def _generator() -> Any:
+        """Cada evento leva um `id` estável, para o cliente descartar repetições quando o
+        EventSource reconecta (o canal fecha a cada ~60 s e o navegador reabre sozinho)."""
         last_status: str | None = row.get("handoff_status")
-        last_ai_count = 0
+        # Só mensagens NOVAS desde a abertura do canal: as respostas que a conversa já tinha
+        # não podem voltar como se fossem a resposta do atendente.
+        baseline = await _ai_messages()
+        last_ai_count = len(baseline) if baseline is not None else 0
         last_sla_announced: str | None = None  # ticket_id whose SLA breach we already told
+        last_expired_announced: str | None = None
         try:
             for _ in range(60):  # até 60 ciclos de 1 s — cliente pode reabrir
                 await asyncio.sleep(1)
                 info = await repo.get_conversation_handoff(get_pool(), user.id, conversation_id)
                 if info is None:
                     return
+                # final_message ANTES de handoff_update: o reply do operador grava a mensagem e
+                # depois resolve o ticket; se o cliente visse `resolved` primeiro, fecharia o
+                # canal antes de receber a resposta.
+                ai_messages = await _ai_messages()
+                if ai_messages is not None and len(ai_messages) > last_ai_count:
+                    last_ai_count = len(ai_messages)
+                    yield {
+                        "event": "final_message",
+                        "id": f"final_message:{last_ai_count}",
+                        "data": json.dumps({"content": str(ai_messages[-1].content)}),
+                    }
                 current_status = info.get("handoff_status")
                 if current_status != last_status:
                     last_status = current_status
+                    # Postgres returns the ticket id as a UUID; json.dumps cannot encode it, and
+                    # the TypeError ended the stream right after final_message (QA-023).
+                    ticket = str(info["ticket_id"]) if info.get("ticket_id") else None
                     yield {
                         "event": "handoff_update",
+                        "id": f"handoff_update:{ticket}:{current_status or 'none'}",
                         "data": json.dumps(
-                            {"status": current_status or "none", "ticket_id": info.get("ticket_id")}
+                            {"status": current_status or "none", "ticket_id": ticket}
                         ),
                     }
                 # sla_breached + handoff_expired come from the live handoffs row — the scheduler
@@ -132,32 +176,18 @@ async def conversation_events(
                         last_sla_announced = ticket_id
                         yield {
                             "event": "sla_breached",
+                            "id": f"sla_breached:{ticket_id}",
                             "data": json.dumps(
                                 {"ticket_id": ticket_id, "breached_at": info.get("ts", "")}
                             ),
                         }
-                    if open_row["status"] == "expired":
+                    if open_row["status"] == "expired" and last_expired_announced != ticket_id:
+                        last_expired_announced = ticket_id
                         yield {
                             "event": "handoff_expired",
+                            "id": f"handoff_expired:{ticket_id}",
                             "data": json.dumps({"ticket_id": ticket_id}),
                         }
-                graph = request.app.state.graph
-                if graph is None:
-                    continue
-                try:
-                    state = await graph.aget_state(
-                        graph_config(user.id, conversation_id, request.state.trace_id)
-                    )
-                except Exception:  # noqa: BLE001, S112 — leitura best-effort; cliente reconecta
-                    continue
-                messages = (state.values or {}).get("messages") or []
-                ai_messages = [m for m in messages if isinstance(m, AIMessage)]
-                if len(ai_messages) > last_ai_count and ai_messages:
-                    last_ai_count = len(ai_messages)
-                    yield {
-                        "event": "final_message",
-                        "data": json.dumps({"content": str(ai_messages[-1].content)}),
-                    }
         finally:
             await _release_sse_slot(user.id)
 

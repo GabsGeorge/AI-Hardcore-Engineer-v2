@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { isHttpUrl } from "@/lib/url";
 import type { Source } from "./types";
 
 /** Clickable sources with a `kb`/`web` tag and the collection date for web sources. The links
@@ -12,14 +13,19 @@ export function SourceList({ sources }: { sources: Source[] }) {
       <ul className="flex flex-col gap-1">
         {sources.map((source, index) => (
           <li key={`${source.url}-${index}`}>
-            <a
-              href={source.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-label text-support hover:underline focus-visible:underline"
-            >
-              {source.title}
-            </a>
+            {isHttpUrl(source.url) ? (
+              <a
+                href={source.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-label text-support hover:underline focus-visible:underline"
+              >
+                {source.title}
+              </a>
+            ) : (
+              // Esquema fora de http/https (javascript:, data:…) não vira link (A3).
+              <span className="text-label text-ink-700">{source.title}</span>
+            )}
             <span className="ml-2 text-label text-ink-400">
               {source.kind.toUpperCase()}
               {source.retrieved_at ? ` · ${source.retrieved_at.slice(0, 10)}` : ""}

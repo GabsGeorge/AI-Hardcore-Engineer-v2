@@ -32,7 +32,7 @@
       "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "targets": [
         {
-          "expr": "sum(increase(getnet_http_requests_total{route=\"/v1/chat\"}[24h]))",
+          "expr": "sum(increase(getnet_chat_turn_duration_seconds_count[24h]))",
           "legendFormat": "chats"
         }
       ]

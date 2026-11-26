@@ -132,6 +132,10 @@ async def current_user(
         if user is None or user["role"] != claims["role"]:
             raise unauthorized()
         return CurrentUser(id=user["id"], role=user["role"])
+    if request.headers.get("authorization") is not None:
+        # An Authorization header that is not a usable Bearer (empty token, other scheme) is a
+        # failed authentication, never a silent fallback to the cookie (QA-058).
+        raise unauthorized()
     from_cookie = await _from_cookie(request)
     if from_cookie is not None:
         return from_cookie

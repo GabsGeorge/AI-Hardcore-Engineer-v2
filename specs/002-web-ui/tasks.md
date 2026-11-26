@@ -97,7 +97,7 @@ antes de qualquer tela.
       [data-model.md](data-model.md).
 - [x] T011 [P] Criar `src/app/auth/passwords.py`: argon2id (`argon2-cffi`) com
       `PASSWORD_PEPPER` e lista local de senhas vazadas (SHA1 prefix, 10 000 entradas,
-      baixada no build via `scripts/fetch-pwned-top.py`). Função `verify(hash, raw) -> bool`
+      baixada no build via `scripts/fetch-pwned-top.py` *(não existe: a lista é versionada em `src/app/auth_data/pwned_sha1_prefixes.txt` — auditoria 2026-11-24)*). Função `verify(hash, raw) -> bool`
       resistente a timing.
 - [x] T012 [P] Criar `src/app/auth/sessions.py`: emissão (`issue(account_id, role) -> (jwt,
       jti)`), validação (`current_session(cookie) -> Session`), revogação por `jti` e por
@@ -119,7 +119,7 @@ antes de qualquer tela.
 - [x] T018 Estender `src/app/ops/scheduler.py` com `expire_auth_tokens` (varre
       `auth_one_time_tokens` e `auth_sessions` revogadas há mais de 7 dias) e documentar na
       docstring da função que o expurgo roda no mesmo tick de retenção.
-- [x] T019 Criar `src/app/db/repo_auth.py` com os helpers de auth\_\*: `create_account`,
+- [x] T019 Criar `src/app/auth/repo.py` *(nome do plano era `src/app/db/repo_auth.py`)* com os helpers de auth\_\*: `create_account`,
       `get_account_by_email`, `set_password`, `activate_account`, `deactivate_account`,
       `link_merchant`, `unlink_merchant`, `list_accounts`, `list_sessions`,
       `revoke_sessions_of_account`, `delete_account_cascade` (transação completa de FR-016a).
@@ -157,7 +157,7 @@ antes de qualquer tela.
       site da Getnet; a decisão fica registrada em DESIGN.md como "redesign limitado".
 - [x] T028 Criar `apps/web/src/design/tokens.ts` espelhando DESIGN.md e
       `apps/web/src/design/tailwind.generated.css` gerado por
-      `apps/web/scripts/tokens-to-tailwind.ts`. O `tailwind.config.ts` lê somente do
+      `apps/web/scripts/tokens-to-tailwind.ts` *(não existe: `tailwind.config.ts` importa `src/design/tokens.ts` direto — auditoria 2026-11-24)*. O `tailwind.config.ts` lê somente do
       `tokens.ts`; `features/**` MUST NOT importar classes de cor cruas (ESLint rule).
 - [x] T029 [P] Design system — componentes mínimos em `apps/web/src/design/`:
       `Button.tsx`, `Input.tsx`, `PasswordInput.tsx`, `Label.tsx`, `FormField.tsx`,
@@ -168,9 +168,10 @@ antes de qualquer tela.
       automática do header `X-CSRF-Token` lido do cookie em mutantes, mapeamento de
       `{error:{code,message}}` para `ApiError` tipada, tratamento de 401 (redireciona para
       `/login`).
-- [x] T031 [P] `apps/web/src/lib/sse.ts`: cliente `EventSource` com reconexão exponencial
-      (backoff cap 10 s), desduplicação por `(event, payload.trace_id | payload.ticket_id)`,
-      cancelamento com `AbortController`.
+- [x] T031 [P] `apps/web/src/lib/sse.ts`: `streamPost` (POST com fetch, sem reconexão; erro HTTP
+      vira `SseHttpError` com `Retry-After`) e `openGetStream` (`EventSource`: a reconexão é a
+      nativa do navegador; sem reconexão manual quando o navegador desiste, ex. 401/403),
+      desduplicação pelo `id` de cada evento, cancelamento com `AbortController`. *(auditoria 2026-11-24: o texto anterior prometia backoff exponencial que o código não fazia; testes em `apps/web/src/lib/sse.test.ts`)*
 - [x] T032 [P] `apps/web/src/lib/i18n.ts`: `react-i18next` com dicionários PT/EN em
       `apps/web/src/i18n/{pt,en}.json`.
 - [x] T033 Layout base: `apps/web/src/app/layout.tsx` (header com logo, menu por papel,
@@ -180,7 +181,7 @@ antes de qualquer tela.
 - [x] T034 [P] Script de seed de admin: `scripts/create_demo_admin.py` que lê
       `ADMIN_SEED_EMAIL`/`ADMIN_SEED_PASSWORD` do `.env` e cria/atualiza o admin em dev; falha
       explícita se `APP_ENV=production`. Documentado no quickstart.
-- [x] T035 [P] Testes de observabilidade do backend: `getnet_auth_login_total{outcome}`,
+- [ ] T035 [P] Testes de observabilidade do backend *(auditoria 2026-11-24: não feito: não existem `tests/integration/test_auth_metrics.py` nem os spans `auth.login`/`auth.send_email`; as métricas `getnet_auth_*` existem em `metrics.py`)*: `getnet_auth_login_total{outcome}`,
       `getnet_sessions_active`, spans `auth.login` e `auth.send_email`. Teste em
       `tests/integration/test_auth_metrics.py`.
 
@@ -199,19 +200,19 @@ DESIGN.md congelam o visual; design system está pronto para ser consumido.
 
 ### Testes (escrever primeiro, devem falhar)
 
-- [x] T036 [P] [US1] Contract test de `auth.yaml`: `tests/contract/test_auth_api.py` com
+- [ ] T036 [P] [US1] Contract test de `auth.yaml` *(auditoria 2026-11-24: não feito: `tests/contract/test_auth_api.py` não existe; o fuzz em `tests/contract/test_openapi_fuzz.py` cobre só `/v1/chat` e requests sem auth)*: `tests/contract/test_auth_api.py` com
       schemathesis sobre `/v1/auth/*` (apenas códigos ≥ 400 na suíte rápida; a sweep
       profunda roda no job `schema` da CI). [REQ-API-02]
 - [x] T037 [P] [US1] Integração: `tests/integration/test_auth_register_flow.py` — cadastro
       com e-mail novo retorna GenericPending e Mailpit tem 1 mensagem; cadastro com e-mail já
       existente retorna GenericPending **sem** adicionar mensagem no Mailpit (sem
       enumeração). [FR-001, FR-004]
-- [x] T038 [P] [US1] Integração: `tests/integration/test_auth_verify.py` — token válido
+- [ ] T038 [P] [US1] Integração: `tests/integration/test_auth_verify.py` *(auditoria 2026-11-24: não feito: o arquivo não existe e token usado/expirado → 410 não tem teste)* — token válido
       ativa; token usado dá 410; token expirado dá 410. [FR-002]
-- [x] T039 [P] [US1] Integração: `tests/integration/test_auth_login.py` — cookie session +
+- [ ] T039 [P] [US1] Integração: `tests/integration/test_auth_login.py` *(auditoria 2026-11-24: parcial: `tests/integration/test_auth_login_and_logout.py` cobre cookies endurecidos e logout que revoga; a listagem em `/v1/auth/sessions` não tem teste)* — cookie session +
       csrf voltam; sessão aparece em `/v1/auth/sessions`; logout limpa cookies e revoga.
       [FR-007, FR-008]
-- [x] T040 [P] [US1] Integração: `tests/integration/test_auth_reset.py` — reset troca a senha,
+- [ ] T040 [P] [US1] Integração: `tests/integration/test_auth_reset.py` *(auditoria 2026-11-24: parcial: `test_auth_login_and_logout.py::test_reset_password_revokes_every_live_session` cobre a revogação; "mesmo link não serve de novo" não tem teste)* — reset troca a senha,
       revoga **todas** as sessões, mesmo link não serve de novo. [FR-006]
 - [x] T041 [P] [US1] Segurança: `tests/security/test_auth_enumeration.py` — tempo de resposta
       não vaza existência (medir em 50 chamadas; p95 do existente / p95 do inexistente < 1,2);
@@ -241,9 +242,9 @@ DESIGN.md congelam o visual; design system está pronto para ser consumido.
 - [x] T047 [P] [US1] `apps/web/src/features/auth/RegisterPage.tsx` — mostra barra de força da
       senha (não bloqueia, só orienta), força comprimento mínimo, bloqueia senhas vazadas na
       submissão (reusa a lista do backend via `GET /v1/auth/password/policy`).
-- [x] T048 [P] [US1] `apps/web/src/features/auth/VerifyEmailPage.tsx` consome `?token=`,
+- [x] T048 [P] [US1] `apps/web/src/features/auth/VerifyPage.tsx` consome `?token=`,
       chama `POST /v1/auth/verify-email`, redireciona para `/login` com toast de sucesso.
-- [x] T049 [P] [US1] `apps/web/src/features/auth/ResetRequestPage.tsx` e
+- [x] T049 [P] [US1] `apps/web/src/features/auth/ForgotPage.tsx` e
       `ResetPasswordPage.tsx` com os mesmos padrões; mensagens genéricas sempre.
 - [x] T050 [US1] Guards: `AuthGuard` redireciona para `/login?next=...`; sair limpa cache do
       TanStack Query e invalida o cookie.
@@ -266,17 +267,17 @@ fonte com link; perguntar "quero falar com um humano" e ver o status mudar.
 
 - [x] T051 [P] [US2] Backend extensão: `tests/contract/test_me_conversations.py` para
       `GET /v1/me/conversations` (paginado por cursor). [FR-014, REQ-API-02]
-- [x] T052 [P] [US2] Backend extensão: `tests/contract/test_events_delta.py` — eventos
+- [x] T052 [P] [US2] Backend extensão: `tests/unit/test_conversation_events.py` *(o nome `tests/contract/test_events_delta.py` do plano não existia; teste escrito na auditoria 2026-11-24)* — eventos
       `sla_breached` e `handoff_expired` surgem no canal de eventos quando o scheduler
       detecta vencimento. [REQ-API-07, FR-011]
-- [x] T053 [P] [US2] `apps/web/src/features/chat/__tests__/ChatPage.test.tsx` (Vitest+RTL):
+- [x] T053 [P] [US2] `apps/web/src/features/chat/ChatPage.test.tsx` (Vitest+RTL):
       ordem das etapas, resposta final, fontes clicáveis, estado "aguardando atendente".
-- [x] T054 [P] [US2] Playwright `apps/web/e2e/02-chat.spec.ts` cobre o cenário completo.
+- [ ] T054 [P] [US2] Playwright `apps/web/e2e/02-chat.spec.ts` cobre o cenário completo. *(auditoria 2026-11-24: parcial: `apps/web/e2e/05-chat.spec.ts` cobre a tela do chat com o servidor simulado no navegador; o fluxo com login e api reais está em `07-hitl-realtime.spec.ts` só para o HITL)*
       [FR-010, FR-011]
 - [x] T055 [P] [US2] XSS: `tests/security/test_chat_render.py` — resposta do grafo contendo
       `<script>` chega ao front como texto (`textContent` igual ao original; `innerHTML` do
       container de mensagens não ganha novas tags). [FR-012]
-- [x] T056 [P] [US2] Streaming: `tests/integration/test_chat_stream_mergeback.py` — refaz a
+- [ ] T056 [P] [US2] Streaming: `tests/integration/test_chat_stream_mergeback.py` *(auditoria 2026-11-24: não feito: o POST do chat não reconecta nem desduplica por `trace_id`; registrado em docs/limitations.md)* — refaz a
       sessão (dropa `EventSource`), reconecta, confere que não há mensagem duplicada
       (dedup por `trace_id`). [FR-013]
 
@@ -308,7 +309,10 @@ fonte com link; perguntar "quero falar com um humano" e ver o status mudar.
       aguardando.
 - [x] T064 [P] [US2] i18n: todas as strings de chat vêm de `i18n/{pt,en}.json`.
 - [x] T065 [US2] Integração com `/v1/conversations/{id}/events` para `handoff_update`,
-      `final_message`, `sla_breached` e `handoff_expired`.
+      `final_message`, `sla_breached` e `handoff_expired`. *(Auditoria 2026-11-24: a task
+      estava marcada sem implementação — `openGetStream` não era usado em lugar nenhum. Agora
+      em `apps/web/src/features/chat/useConversationEvents.ts` + `ChatPage.tsx`; testes em
+      `ChatPage.events.test.tsx` e `apps/web/e2e/07-hitl-realtime.spec.ts`.)*
 
 **Checkpoint US2**: Playwright passa; mensagens contendo HTML vão como texto; a conversa
 reflete o chamado humano em até 5 s.
@@ -331,7 +335,7 @@ a fila (ticket aparece no topo), responde "Resolvido"; lojista recebe a resposta
       approved`. (regressão da correção 4 do audit; FR-018)
 - [x] T068 [P] [US3] RBAC: `tests/security/test_handoff_rbac.py` — lojista acessando
       `/v1/handoffs` recebe 403 `forbidden_role`. [FR-024, REQ-SEC-06]
-- [x] T069 [P] [US3] Playwright `apps/web/e2e/03-handoff.spec.ts`. [FR-030]
+- [x] T069 [P] [US3] Playwright `apps/web/e2e/07-hitl-realtime.spec.ts` *(o `03-handoff.spec.ts` do plano não existia; escrito na auditoria 2026-11-24: lojista escala, operador responde pela fila, resposta aparece em até 5 s)*. [FR-030]
 
 ### Implementação
 
@@ -363,7 +367,7 @@ preservadas.
 
 ### Implementação
 
-- [x] T076 [US4] `apps/web/src/features/conversations/ConversationsPage.tsx` — lista
+- [x] T076 [US4] `apps/web/src/features/conversations/HistoryPage.tsx` — lista
       paginada por cursor, carregando a prévia e o status do chamado. Estado vazio com
       ilustração do design system.
 - [x] T077 [US4] Link direto para `/chat/:id` reabrindo a conversa com o estado do
@@ -385,10 +389,10 @@ histórico vazio; excluir conta e conferir login genérico.
       `/v1/me/account` sem senha → 401; com senha → apaga `auth_accounts`, revoga sessões,
       desvincula merchant; `audit_events.actor_id` fica pseudonimizado; novo cadastro com o
       mesmo e-mail funciona. [FR-016a, REQ-SEC-09]
-- [x] T079 [P] [US5] Backend regressão: `tests/integration/test_me_delete_data.py`
+- [x] T079 [P] [US5] Backend regressão: `tests/integration/test_lgpd.py` (checkpoints) + `tests/integration/test_me_delete_account.py` *(o nome `test_me_delete_data.py` do plano não existe — auditoria 2026-11-24)*
       continua apagando checkpoints (correções 2 e 3 do audit da 001; não quebrou com a
       camada nova).
-- [x] T080 [P] [US5] Playwright `apps/web/e2e/05-privacy.spec.ts`.
+- [x] T080 [P] [US5] Playwright `apps/web/e2e/05-privacy.spec.ts`. *(feito em 2026-11-26 após o QA independente: apaga as conversas pela tela, confere o histórico vazio e roda o axe; a exclusão da conta fica na integração e no Vitest para não apagar a conta compartilhada dos outros specs)*
 
 ### Implementação
 
@@ -396,7 +400,9 @@ histórico vazio; excluir conta e conferir login genérico.
       [contracts/me.yaml](contracts/me.yaml): valida senha pelo mesmo caminho do login
       (sem revelar erro específico), executa `repo_auth.delete_account_cascade`, limpa
       cookies com `Max-Age=0`.
-- [x] T082 [US5] `apps/web/src/features/privacy/PrivacyPage.tsx` com duas seções
+- [x] T082 [US5] `apps/web/src/features/privacy/PrivacyPage.tsx` com duas seções *(QA independente
+      2026-11-26, QA-016: a tela entregue era um placeholder "Em construção" apesar do [x]; feita
+      agora, com `PrivacyPage.test.tsx` e `e2e/05-privacy.spec.ts`)*
       ("Apagar minhas conversas" e "Excluir minha conta") separadas visualmente; cada ação
       exige confirmação digitada e, para excluir conta, a senha atual. Resumo final mostra
       o que foi apagado e o que ficou (auditoria pseudonimizada, estabelecimento preservado).
@@ -533,7 +539,7 @@ Task: "apps/web/e2e/01-register-login.spec.ts (Playwright)"
 Task: "apps/web/src/features/auth/LoginPage.tsx"
 Task: "apps/web/src/features/auth/RegisterPage.tsx"
 Task: "apps/web/src/features/auth/VerifyEmailPage.tsx"
-Task: "apps/web/src/features/auth/ResetRequestPage.tsx + ResetPasswordPage.tsx"
+Task: "apps/web/src/features/auth/ForgotPage.tsx + ResetPage.tsx"
 ```
 
 ---

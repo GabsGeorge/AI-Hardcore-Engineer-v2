@@ -59,6 +59,9 @@ async def support_node(state: SpecialistInput, config: RunnableConfig) -> dict[s
         HumanMessage(content=subtask["query"]),
     ]
     records: list[ToolCallRecord] = []
+    # The account data each tool returned, as the model saw it: the output guardrail checks a
+    # composed reply (knowledge + support) against it, not only against the knowledge passages.
+    evidence: list[str] = []
     tokens, answer = 0, ""
 
     budget = get_settings().token_budget_per_run
@@ -86,6 +89,11 @@ async def support_node(state: SpecialistInput, config: RunnableConfig) -> dict[s
             records.append(record)
             ok = record["status"] == "ok"
             content = to_jsonable_python(output) if ok else {"error": record["status"]}
+            if ok:
+                evidence.append(
+                    f"(account data from tool {call['name']})\n"
+                    f"{json.dumps(content, ensure_ascii=False)}"
+                )
             messages.append(
                 ToolMessage(
                     content=json.dumps(content, ensure_ascii=False), tool_call_id=call["id"] or ""
@@ -97,6 +105,11 @@ async def support_node(state: SpecialistInput, config: RunnableConfig) -> dict[s
         # No data behind the answer: say so honestly instead of passing a guess along.
         answer, confidence = NO_DATA[lang], 0.0
     result = make_result(
-        subtask, "support", answer=answer, confidence=confidence, tools_used=records
+        subtask,
+        "support",
+        answer=answer,
+        confidence=confidence,
+        tools_used=records,
+        evidence=evidence if confidence > 0.0 else (),
     )
     return {"results": [result], "route_trace": ["support"], "tokens_used": tokens}

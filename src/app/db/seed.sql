@@ -1,8 +1,8 @@
 -- Deterministic mock data for the Support agent (REQ-SUP-02). Fictitious merchants only.
 -- Dates are relative to the session setting `app.seed_date` (set by app.db.migrate.apply_seed):
 -- d = reference day ("today"), d - 1 = "yesterday". Local times are America/Sao_Paulo.
--- Idempotent: users and decline codes are upserted; the seed merchants' rows are deleted and
--- reinserted, so a new reference date moves every date consistently.
+-- Idempotent: users, decline codes and merchants are upserted (an admin link survives); the
+-- terminals, transactions and settlements are rebuilt for the reference date.
 -- Each merchant has clearly different amounts so a cross-customer leak is easy to detect.
 
 INSERT INTO users (id, role, display_name) VALUES
@@ -32,14 +32,25 @@ ON CONFLICT (code) DO UPDATE SET
     action_pt = EXCLUDED.action_pt,
     action_en = EXCLUDED.action_en;
 
--- Cascades to terminals, transactions and settlements of the seed merchants.
-DELETE FROM merchants WHERE user_id IN ('cliente1988', 'cliente2024', 'cliente3033');
+-- The seed merchants' mock rows are rebuilt so a new reference date moves every date
+-- consistently. The merchants rows themselves are upserted, never deleted: an admin may have
+-- linked a web account to one of them (merchants.account_id), and re-running the seed (every
+-- `docker compose run --rm api ...` starts the ingest job) must not undo that link.
+DELETE FROM settlements WHERE merchant_id IN ('cliente1988', 'cliente2024', 'cliente3033');
+DELETE FROM transactions WHERE merchant_id IN ('cliente1988', 'cliente2024', 'cliente3033');
+DELETE FROM terminals WHERE merchant_id IN ('cliente1988', 'cliente2024', 'cliente3033');
 
 INSERT INTO merchants (user_id, trade_name, document_masked, plan, settlement_days,
                        anticipation_enabled) VALUES
     ('cliente1988', 'Mercadinho Sol Nascente', '**.***.***/0001-**', 'Get Smart', 1, true),
     ('cliente2024', 'Café Lua Cheia', '**.***.***/0001-**', 'Get Clássica', 30, false),
-    ('cliente3033', 'Ótica Horizonte', '**.***.***/0001-**', 'Get Mini', 1, false);
+    ('cliente3033', 'Ótica Horizonte', '**.***.***/0001-**', 'Get Mini', 1, false)
+ON CONFLICT (user_id) DO UPDATE SET
+    trade_name = EXCLUDED.trade_name,
+    document_masked = EXCLUDED.document_masked,
+    plan = EXCLUDED.plan,
+    settlement_days = EXCLUDED.settlement_days,
+    anticipation_enabled = EXCLUDED.anticipation_enabled;
 
 INSERT INTO terminals (id, merchant_id, model, serial, connectivity, status, last_seen_at,
                        last_error)

@@ -155,6 +155,14 @@ async def _check_grounding(final: str, results: list[Any], question: str = "") -
             reply_supported=result.reply_supported,
             about_other_thing=result.about_other_thing,
             reason=result.reason,
+            # What the checker had to judge with (counts only, no text): a block with zero
+            # account items on a composed reply means the evidence did not reach it.
+            passages=sum(
+                len(r.get("evidence") or []) for r in results if r.get("agent") != "support"
+            ),
+            account_items=sum(
+                len(r.get("evidence") or []) for r in results if r.get("agent") == "support"
+            ),
         )
     return result.verdict
 
@@ -188,6 +196,15 @@ async def output_guardrail(state: AgentState) -> dict[str, Any]:
         for r in results
         if r.get("agent") == "knowledge" and not r.get("error") and r.get("sources")
     ]
+    # A composed turn (knowledge + support) carries account data in the same reply: the checker
+    # gets what the support tools returned too, otherwise every true statement about the
+    # merchant's own terminals or settlements reads as unsupported and the whole reply is
+    # replaced (QA-005/QA-010). Same strictness, complete evidence.
+    account_data = [
+        r
+        for r in results
+        if r.get("agent") == "support" and not r.get("error") and r.get("evidence")
+    ]
     blocked = False
     if knowledge_with_sources and not rewritten:
         if _has_unsupported_negative(masked_final, knowledge_with_sources):
@@ -195,7 +212,7 @@ async def output_guardrail(state: AgentState) -> dict[str, Any]:
             grounded: bool | None = False
         else:
             grounded = await _check_grounding(
-                masked_final, knowledge_with_sources, _last_question(messages)
+                masked_final, knowledge_with_sources + account_data, _last_question(messages)
             )
         if grounded is False:
             masked_final = _UNGROUNDED.get(language, _UNGROUNDED["pt"])

@@ -82,6 +82,7 @@ class ConversationMessage(BaseModel):
     role: Literal["user", "assistant"]
     content: str
     trace_id: str | None = None
+    sources: list[Source] = Field(default_factory=list)
 
 
 class Conversation(BaseModel):

@@ -1,11 +1,14 @@
+import { useTranslation } from "react-i18next";
+
 export function Spinner({ size = 16 }: { size?: number }) {
+  const { t } = useTranslation();
   return (
     <svg
       viewBox="0 0 24 24"
       width={size}
       height={size}
       role="img"
-      aria-label="Carregando"
+      aria-label={t("app.loading")}
       className="animate-spin motion-reduce:animate-none"
     >
       <circle

@@ -10,7 +10,11 @@
 const JSON_HEADERS = { "Content-Type": "application/json", Accept: "application/json" };
 
 export type ApiErrorBody = {
-  error?: { code?: string; message?: string };
+  error?: {
+    code?: string;
+    message?: string;
+    details?: { loc?: (string | number)[]; type?: string }[];
+  };
   trace_id?: string;
 };
 
@@ -41,8 +45,12 @@ async function parseError(response: Response): Promise<ApiError> {
   }
   const code = body?.error?.code ?? `http_${response.status}`;
   const message = body?.error?.message ?? response.statusText;
-  const retryHeader = response.headers.get("Retry-After");
-  const retryAfterSeconds = retryHeader ? Number(retryHeader) : undefined;
+  // Só a forma em segundos; uma data HTTP (ou lixo) vira `undefined`, nunca NaN.
+  const retrySeconds = Number(response.headers.get("Retry-After")?.trim() ?? "");
+  const retryAfterSeconds =
+    response.headers.has("Retry-After") && Number.isFinite(retrySeconds) && retrySeconds >= 0
+      ? Math.ceil(retrySeconds)
+      : undefined;
   return new ApiError(code, message, response.status, body, retryAfterSeconds);
 }
 
@@ -66,12 +74,14 @@ async function request<T>(
       headers.set("X-CSRF-Token", token);
     }
   }
+  // `init` primeiro: um `init.headers` do chamador já foi mesclado acima e não pode apagar o
+  // X-CSRF-Token nem o Content-Type montados aqui.
   const response = await fetch(path, {
+    ...init,
     method,
     credentials: "include",
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    ...init,
   });
   if (!response.ok) {
     throw await parseError(response);
@@ -103,6 +113,15 @@ export const api = {
     return request<T>("DELETE", path, body, init);
   },
 };
+
+/** True when a 422 points at this body field (e.g. `email`), so the form can mark it. */
+export function isFieldError(err: unknown, field: string): boolean {
+  return (
+    isApiError(err) &&
+    err.status === 422 &&
+    (err.body?.error?.details ?? []).some((d) => (d.loc ?? []).includes(field))
+  );
+}
 
 export function isApiError(value: unknown): value is ApiError {
   return value instanceof ApiError;

@@ -32,23 +32,23 @@ tables mirror the exported values.
 A 7-step neutral ramp plus two accents (brand and support). Each token documents the one
 job it has.
 
-| Token                 | Hex       | Job                                                     |
-| --------------------- | --------- | ------------------------------------------------------- |
-| `color.brand`         | `#EC0000` | Primary action, selected tab, destructive confirmation. |
-| `color.brand.hover`   | `#D00000` | Hover of a brand element.                               |
-| `color.brand.pressed` | `#B40000` | Pressed state.                                          |
-| `color.brand.soft`    | `#FBE4E4` | Tag or badge background to signal brand state.          |
-| `color.support`       | `#005CB9` | Informational accent (links, info banners). Rare.       |
-| `color.ink.900`       | `#111318` | Headings.                                               |
-| `color.ink.700`       | `#282828` | Body text.                                              |
-| `color.ink.500`       | `#454C52` | Secondary text, labels.                                 |
-| `color.ink.400`       | `#66707A` | Captions, timestamps.                                   |
-| `color.surface.100`   | `#FFFFFF` | Page background.                                        |
-| `color.surface.200`   | `#F5F7FA` | Card background, resting input.                         |
-| `color.surface.300`   | `#E1E6EB` | Divider, muted button.                                  |
-| `color.state.success` | `#117A2B` | "resolved" status.                                      |
-| `color.state.warning` | `#B45309` | "awaiting_human" and SLA warnings.                      |
-| `color.state.danger`  | `#B40000` | Error banner, "expired" status.                         |
+| Token                 | Hex       | Job                                                      |
+| --------------------- | --------- | -------------------------------------------------------- |
+| `color.brand`         | `#EC0000` | Primary action, selected tab, destructive confirmation.  |
+| `color.brand.hover`   | `#D00000` | Hover of a brand element.                                |
+| `color.brand.pressed` | `#B40000` | Pressed state.                                           |
+| `color.brand.soft`    | `#FBE4E4` | Tag or badge background to signal brand state.           |
+| `color.support`       | `#005CB9` | Informational accent (links, info banners). Rare.        |
+| `color.ink.900`       | `#111318` | Headings.                                                |
+| `color.ink.700`       | `#282828` | Body text.                                               |
+| `color.ink.500`       | `#454C52` | Secondary text, labels.                                  |
+| `color.ink.400`       | `#66707A` | Captions, timestamps.                                    |
+| `color.surface.100`   | `#FFFFFF` | Page background.                                         |
+| `color.surface.200`   | `#F5F7FA` | Card background, resting input.                          |
+| `color.surface.300`   | `#E1E6EB` | Divider, muted button.                                   |
+| `color.state.success` | `#0F6E27` | "resolved" status (≥ 4.5:1 on its 10% badge tint).       |
+| `color.state.warning` | `#9A4507` | "awaiting_human" and SLA warnings (≥ 4.5:1 on its tint). |
+| `color.state.danger`  | `#B40000` | Error banner, "expired" status.                          |
 
 Dark mode is intentionally **not** shipped in this release. The chat is a working
 surface; a theme switch is a distraction without a confirmed user demand (recorded under

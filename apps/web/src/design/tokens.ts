@@ -25,8 +25,8 @@ export const color = {
     300: "#E1E6EB",
   },
   state: {
-    success: "#117A2B",
-    warning: "#B45309",
+    success: "#0F6E27",
+    warning: "#9A4507",
     danger: "#B40000",
   },
 } as const;

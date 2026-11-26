@@ -13,6 +13,15 @@ HTTP_LATENCY = Histogram(
     labelnames=("route",),
     buckets=(0.1, 0.3, 0.6, 1.0, 2.0, 4.0, 6.0, 8.0, 12.0, 20.0),
 )
+# A chat turn from request to final answer, for /v1/chat AND /v1/chat/stream (the route the web
+# UI uses). The HTTP histogram above stops when the stream starts, so the UI traffic was out of
+# the latency SLO panel and alert (QA-078).
+CHAT_TURN_LATENCY = Histogram(
+    "getnet_chat_turn_duration_seconds",
+    "Chat turn latency, request to final answer.",
+    labelnames=("endpoint",),
+    buckets=(0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 30.0, 60.0),
+)
 ROUTE_TAKEN = Counter("getnet_route_total", "Supervisor dispatches per node.", labelnames=("node",))
 TOKENS = Counter("getnet_tokens_total", "LLM tokens per graph role.", labelnames=("role",))
 TOOL_ERRORS = Counter("getnet_tool_errors_total", "Failed tool calls.", labelnames=("tool",))
@@ -35,3 +44,25 @@ ONLINE_EVAL_SCORE = Histogram(
     labelnames=("metric",),
     buckets=(0.0, 0.3, 0.5, 0.7, 0.8, 0.9, 1.0),
 )
+
+
+def initialise_label_sets(tools: list[str]) -> None:
+    """Create every known label set at 0, so a panel shows 0 instead of "No data" before the
+    first event (QA-075..QA-077: tool errors, login outcomes, e-mails)."""
+    for tool in tools:
+        TOOL_ERRORS.labels(tool)
+    for outcome in (
+        "ok",
+        "bad_password",
+        "unknown_account",
+        "locked",
+        "rate_limited",
+        "pending",
+        "deactivated",
+    ):
+        AUTH_LOGIN.labels(outcome)
+    for kind in ("verify_email", "password_reset", "invite"):
+        AUTH_EMAIL_SENT.labels(kind)
+        AUTH_EMAIL_ERRORS.labels(kind)
+    for endpoint in ("/v1/chat", "/v1/chat/stream"):
+        CHAT_TURN_LATENCY.labels(endpoint)

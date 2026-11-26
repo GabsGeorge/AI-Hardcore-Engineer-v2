@@ -2,7 +2,11 @@
   "app": {
     "title": "Getnet Support",
     "signOut": "Sign out",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "nav": "Main",
+    "navMobile": "Main (mobile)",
+    "showPassword": "show",
+    "hidePassword": "hide"
   },
   "nav": {
     "chat": "Chat",
@@ -36,8 +40,10 @@
       "credentials": "Invalid credentials.",
       "locked": "Too many attempts. Try again in {{seconds}}s.",
       "rateLimited": "Too many requests. Try again in {{seconds}}s.",
-      "weakPassword": "Password must be at least 12 characters and not one of the most used."
-    }
+      "weakPassword": "Password must be at least 12 characters and not one of the most used.",
+      "invalidEmail": "Enter a valid e-mail, such as name@company.com."
+    },
+    "sessionExpired": "Your session expired. Sign in again to continue where you left off."
   },
   "chat": {
     "inputLabel": "Message",
@@ -45,10 +51,12 @@
     "send": "Send",
     "thinking": "Thinking…",
     "sources": "Sources",
-    "rateLimited": "Too many messages within a minute. Wait a moment before sending again.",
+    "rateLimited": "Too many messages in a short time. Wait {{seconds}} s before sending again.",
     "errors": {
       "interrupted": "The answer was interrupted before it finished. Please send your question again.",
-      "generic": "I could not answer right now. Please try again in a moment."
+      "generic": "I could not answer right now. Please try again in a moment.",
+      "notLinked": "Your account is not linked to an establishment yet. Ask the administrator to link it.",
+      "invalid": "I couldn't send this message. Check the text (up to 4,000 characters) and try again."
     },
     "handoffLockPlaceholder": "Waiting for a human agent to reply…",
     "handoffLockHint": "While the ticket is with a human agent, new messages are blocked.",
@@ -61,6 +69,14 @@
       "resolvedBody": "A human agent replied to your request.",
       "expiredTitle": "Ticket expired",
       "expiredBody": "We couldn't attend in time. If you still need help, send a new message."
+    },
+    "maxLength": "Limit of {{max}} characters per message.",
+    "feedback": {
+      "label": "Rate this answer",
+      "up": "👍 Helpful",
+      "down": "👎 Not helpful",
+      "thanks": "Thanks for the feedback.",
+      "error": "Could not record the rating."
     }
   },
   "privacy": {
@@ -120,7 +136,6 @@
     "title": "Ticket detail",
     "loading": "Open the ticket from the queue to load its context.",
     "summary": "Summary",
-    "context": "Context",
     "pendingAction": "Pending action",
     "pendingActionBody": "The merchant asked for an action that needs operator approval: {{type}}.",
     "decisionLegend": "Pending action decision",
@@ -132,7 +147,14 @@
     "send": "Send reply",
     "sent": "Reply sent.",
     "alreadyClosed": "This ticket has already been closed.",
-    "sendError": "Could not send. Try again."
+    "sendError": "Could not send. Try again.",
+    "merchant": "Merchant",
+    "merchantUnknown": "Unidentified merchant",
+    "conversation": "Latest messages",
+    "noMessages": "No messages recorded for this ticket.",
+    "fromMerchant": "Merchant",
+    "fromAssistant": "Assistant",
+    "route": "Internal support route"
   },
   "admin": {
     "home": {
@@ -177,7 +199,18 @@
       "activated": "Account reactivated.",
       "sendError": "Could not complete. Try again.",
       "cancel": "Cancel",
-      "confirm": "Confirm"
+      "confirm": "Confirm",
+      "roles": {
+        "merchant": "Merchant",
+        "operator": "Operator",
+        "admin": "Admin"
+      },
+      "statuses": {
+        "pending": "Pending",
+        "active": "Active",
+        "locked": "Locked",
+        "deactivated": "Deactivated"
+      }
     },
     "link": {
       "title": "Link merchant to establishment",
@@ -212,7 +245,13 @@
       "columnTrace": "Trace",
       "pseudonymised": "pseudonymised merchant",
       "emptyTitle": "No events",
-      "emptyBody": "Adjust the filters."
+      "emptyBody": "Adjust the filters.",
+      "loadMore": "Load more",
+      "outcome": {
+        "allowed": "allowed",
+        "denied": "denied",
+        "error": "error"
+      }
     },
     "invite": {
       "title": "Accept invitation",

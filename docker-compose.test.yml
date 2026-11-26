@@ -52,6 +52,16 @@ services:
     network_mode: none
     command: ["sh", "-c", "ruff check . && ruff format --check . && mypy"]
 
+  # Api do E2E do navegador: a mesma imagem e o mesmo código, com o LLM roteirizado de
+  # tests/e2e_llm.py (sem chave nem rede externa, ADR 0006) e duas contas de teste ativas
+  # (lojista vinculado ao cliente1988 e operador). tests/ é montado só aqui, nunca na imagem.
+  api:
+    environment:
+      APP_ENV: test
+    volumes:
+      - ./tests:/app/tests:ro
+    command: ["python", "-m", "tests.e2e_server"]
+
   # --- Frontend (feature 002) --------------------------------------------------------------
   # Shared Node image: install once, mount the source, reuse for lint / unit / E2E.
   # The three services below fall back to `npm install` when package-lock.json is absent

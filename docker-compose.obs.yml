@@ -9,5 +9,7 @@ services:
   api:
     environment:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    # required: false — combined with another profile (e.g. `--profile eval`) without `obs`,
+    # tempo is not defined and compose refused the whole project (QA-043).
     depends_on:
-      tempo: { condition: service_started }
+      tempo: { condition: service_started, required: false }

@@ -58,6 +58,7 @@ class QueueOverview(BaseModel):
 
 
 class AuditEventOut(BaseModel):
+    id: int
     ts: datetime
     actor_id: str
     actor_role: str
@@ -215,7 +216,7 @@ async def link_merchant(
     acc = await auth_repo.get_account_by_id(pool, body.account_id)
     if acc is None or acc.role != "merchant":
         raise AppError(409, "invalid_account", "Conta inválida para vínculo.")
-    linked = await auth_repo.link_merchant(
+    linked, released = await auth_repo.link_merchant(
         pool, merchant_user_id=merchant_user_id, account_id=body.account_id
     )
     if not linked:
@@ -232,7 +233,7 @@ async def link_merchant(
         actor_id=user.id,
         action="merchant_linked",
         target=f"merchant:{merchant_user_id}",
-        metadata={"account_id": body.account_id},
+        metadata={"account_id": body.account_id, "released_merchant": released},
     )
     return Response(status_code=204)
 
@@ -262,8 +263,11 @@ async def queue_overview(_user: CurrentUser = Depends(_ADMIN)) -> QueueOverview:
 async def audit_list(
     action: str | None = Query(default=None, max_length=120),
     since: datetime | None = Query(default=None),
+    before_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=50, ge=1, le=200),
     _user: CurrentUser = Depends(_ADMIN),
 ) -> list[AuditEventOut]:
-    rows = await db_repo.list_audit_events(get_pool(), action=action, since=since, limit=limit)
+    rows = await db_repo.list_audit_events(
+        get_pool(), action=action, since=since, before_id=before_id, limit=limit
+    )
     return [AuditEventOut(**r) for r in rows]

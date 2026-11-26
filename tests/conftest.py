@@ -46,6 +46,7 @@ APP_TABLES = [
     "auth_accounts",
     "audit_events",
     "feedback",
+    "chat_turns",
     "handoffs",
     "conversations",
     "chunks",

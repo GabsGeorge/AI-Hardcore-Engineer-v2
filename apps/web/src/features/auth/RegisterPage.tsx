@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { z } from "zod";
 import { Alert, Button, FormField, Input, Logo, PasswordInput } from "@/design";
-import { api, isApiError } from "@/lib/api";
+import { api, isApiError, isFieldError } from "@/lib/api";
 
 const Schema = z.object({
   display_name: z.string().min(2).max(80),
@@ -23,6 +23,7 @@ export function RegisterPage() {
   });
   const [weakPassword, setWeakPassword] = useState(false);
   const [generic, setGeneric] = useState(false);
+  const [badEmail, setBadEmail] = useState(false);
 
   const mutation = useMutation({
     mutationFn: (payload: RegisterBody) =>
@@ -30,6 +31,10 @@ export function RegisterPage() {
     onError: (err) => {
       if (isApiError(err) && err.code === "weak_password") {
         setWeakPassword(true);
+        return;
+      }
+      if (isFieldError(err, "email")) {
+        setBadEmail(true);
         return;
       }
       setGeneric(true);
@@ -44,6 +49,7 @@ export function RegisterPage() {
     event.preventDefault();
     const parsed = Schema.safeParse(body);
     setGeneric(false);
+    setBadEmail(false);
     if (!parsed.success) {
       setWeakPassword(parsed.error.issues.some((i) => i.path[0] === "password"));
       return;
@@ -85,7 +91,11 @@ export function RegisterPage() {
             />
           )}
         </FormField>
-        <FormField label={t("auth.email")} required>
+        <FormField
+          label={t("auth.email")}
+          required
+          error={badEmail ? t("auth.errors.invalidEmail") : undefined}
+        >
           {({ input }) => (
             <Input
               id={input}

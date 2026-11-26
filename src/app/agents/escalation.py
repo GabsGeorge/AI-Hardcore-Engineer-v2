@@ -13,7 +13,7 @@ Steps:
 from typing import Any
 from uuid import UUID
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
@@ -61,6 +61,27 @@ async def _summarise(state: AgentState, language: str) -> str:
     return str(getattr(reply, "content", "")).strip() or "no summary"
 
 
+_CONTEXT_MESSAGES = 6
+_CONTEXT_CHARS = 500
+
+
+async def ticket_context(state: AgentState, user_id: str) -> dict[str, Any]:
+    """What the operator needs to pick the ticket up (QA-022): who the merchant is and the last
+    messages of the conversation, besides the internal route. The messages are already
+    PII-masked by the input/output guardrails; long ones are cut."""
+    recent: list[dict[str, str]] = []
+    for m in (state.get("messages") or [])[-_CONTEXT_MESSAGES:]:
+        if isinstance(m, HumanMessage | AIMessage):
+            role = "merchant" if isinstance(m, HumanMessage) else "assistant"
+            recent.append({"role": role, "content": str(m.content)[:_CONTEXT_CHARS]})
+    return {
+        "merchant": {"id": user_id, "name": await repo.get_merchant_name(get_pool(), user_id)},
+        "recent_messages": recent,
+        "route": state.get("route_trace") or [],
+        "tools_used": [t for r in state.get("results") or [] for t in r.get("tools_used", [])],
+    }
+
+
 async def escalation_node(state: AgentState, config: RunnableConfig) -> dict[str, Any]:
     conf = config.get("configurable", {})
     user_id = conf.get("user_id", "")
@@ -92,7 +113,7 @@ async def escalation_node(state: AgentState, config: RunnableConfig) -> dict[str
             user_id=user_id,
             reason=reason,
             summary=summary,
-            context={"route": state.get("route_trace") or []},
+            context=await ticket_context(state, user_id),
             pending_action=pending_action,
             sla_minutes=settings.handoff_sla_minutes,
             expiry_hours=settings.handoff_expiry_hours,

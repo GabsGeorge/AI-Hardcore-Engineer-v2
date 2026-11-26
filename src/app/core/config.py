@@ -58,6 +58,8 @@ class Settings(BaseSettings):
     rag_relevance_threshold: float = Field(0.30, ge=0, le=1)
 
     rate_limit_per_min: int = Field(30, ge=1)
+    # Cadastro e pedido de recuperação de senha: por IP e por e-mail, janela de 1 h (E2).
+    auth_flow_limit_per_hour: int = Field(5, ge=1)
     handoff_sla_minutes: int = Field(15, ge=1)
     handoff_expiry_hours: int = Field(24, ge=1)
 
@@ -66,6 +68,9 @@ class Settings(BaseSettings):
     retention_audit_days: int = Field(365, ge=1)
 
     eval_sample_rate: float = Field(0.10, ge=0, le=1)
+    # The ingest job skips crawling when the knowledge base already has documents; set to 1 to
+    # re-crawl on purpose (INGEST_REFRESH=1 docker compose run --rm ingest).
+    ingest_refresh: bool = False
     otel_exporter_otlp_endpoint: str = ""
     metrics_port: int = Field(9100, ge=0)  # internal only; 0 disables the exporter
 

@@ -160,9 +160,13 @@ paths:
           application/json:
             schema: { $ref: '#/components/schemas/FeedbackRequest' }
       responses:
-        '204': { description: Registrado }
+        '202': { description: Registrado }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '404':
+          description: O trace não é de uma resposta que este usuário recebeu (QA-024).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
         '422': { $ref: '#/components/responses/ValidationError' }
 
   /v1/me/data:
@@ -241,7 +245,12 @@ components:
       type: object
       required: [response, conversation_id, route, sources, tools_used, confidence, handoff, guardrails, trace_id]
       properties:
-        response: { type: string }
+        response:
+          type: string
+          description: >-
+            The reply. When the turn stops at a pending handoff (handoff.status = awaiting_human)
+            there is no synthesized reply; the API returns a short notice in the conversation
+            language instead of an empty string.
         conversation_id: { type: string, format: uuid }
         route:
           type: array
@@ -305,7 +314,11 @@ components:
             properties:
               role: { type: string, enum: [user, assistant] }
               content: { type: string, description: "PII mascarada." }
-              trace_id: { type: string }
+              trace_id: { type: [string, 'null'], description: "Trace da resposta; base do feedback." }
+              sources:
+                type: array
+                description: Fontes que a resposta listou (reabrir pelo histórico mostra as mesmas).
+                items: { $ref: '#/components/schemas/Source' }
 
     Handoff:
       type: object
@@ -322,7 +335,20 @@ components:
           properties:
             route: { type: array, items: { type: string } }
             tools_used: { type: array, items: { $ref: '#/components/schemas/ToolCall' } }
-            recent_messages: { type: array, items: { type: string } }
+            recent_messages:
+              description: Últimas mensagens da conversa (até 6, PII mascarada, até 500 caracteres cada).
+              type: array
+              items:
+                type: object
+                properties:
+                  role: { type: string, enum: [merchant, assistant] }
+                  content: { type: string }
+            merchant:
+              description: Quem abriu o chamado (QA-022).
+              type: object
+              properties:
+                id: { type: string }
+                name: { type: [string, 'null'] }
         pending_action:
           type: [object, 'null']
           properties:

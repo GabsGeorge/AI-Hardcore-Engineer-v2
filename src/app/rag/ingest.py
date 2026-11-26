@@ -7,6 +7,7 @@ again; a changed one has its chunks replaced, so they get new ids and the BM25 f
 
 import asyncio
 import hashlib
+import os
 from datetime import date
 from typing import Any
 
@@ -106,6 +107,33 @@ async def ingest_sources(
     return report
 
 
+async def kb_document_count(pool: Pool) -> int:
+    """Documents already in the knowledge base (0 on a fresh database)."""
+    async with pool.connection() as conn:
+        row = await (await conn.execute("SELECT count(*) AS n FROM documents")).fetchone()
+    return int(row["n"]) if row else 0
+
+
+def crawl_decision(*, has_key: bool, existing_documents: int, refresh: bool) -> str | None:
+    """Why the crawl is skipped (`None` = crawl). Pure, so the rule is tested without a database.
+
+    - no OpenAI key: nothing could be embedded;
+    - knowledge base already populated and no explicit refresh: the base survives restarts in the
+      `pgdata` volume, and re-crawling ~100 pages on every `docker compose up` only re-checks
+      hashes, delays the api and hammers the site, whose bot protection then refuses the
+      crawler. Refresh on purpose with `INGEST_REFRESH=1 docker compose run --rm ingest`.
+    """
+    if not has_key:
+        return "OPENAI_API_KEY is empty"
+    if existing_documents > 0 and not refresh:
+        return "knowledge_base_present"
+    return None
+
+
+def reranker_enabled() -> bool:
+    return os.environ.get("SKIP_RERANKER", "").lower() not in ("1", "true", "yes")
+
+
 async def main() -> None:
     configure_logging()
     settings = get_settings()
@@ -117,21 +145,29 @@ async def main() -> None:
         if settings.app_env != "production":
             seeded = await apply_seed(pool, settings.seed_reference_date or date.today())
         key = settings.openai_api_key
-        if key is None or not key.get_secret_value():
-            # The API waits for this job to finish: without a key it still has to succeed.
-            get_logger().warning("ingest_skipped", reason="OPENAI_API_KEY is empty")
+        existing = await kb_document_count(pool)
+        skip = crawl_decision(
+            has_key=key is not None and bool(key.get_secret_value()),
+            existing_documents=existing,
+            refresh=settings.ingest_refresh,
+        )
+        if skip is not None:
+            # The API waits for this job to finish: a skip still has to succeed.
+            get_logger().info("ingest_skipped", reason=skip, documents=existing)
             report = dict.fromkeys(
                 ("sources", "pages", "indexed", "unchanged", "chunks", "failed"), 0
             )
         else:
             report = await ingest_sources(pool)
             # Download the ~150 MB reranker here, into the shared models-cache volume, so no
-            # request waits on it (block review finding 2).
-            try:
-                await asyncio.to_thread(warm_reranker)
-            except Exception as exc:  # a reranker failure is not fatal: searches degrade honestly
-                get_logger().warning("reranker_warmup_failed", error=type(exc).__name__)
-        get_logger().info("ingest_finished", seeded=seeded, **report)
+            # request waits on it (block review finding 2). With SKIP_RERANKER=1 (the compose
+            # default) the api never loads it, so the download is skipped too.
+            if reranker_enabled():
+                try:
+                    await asyncio.to_thread(warm_reranker)
+                except Exception as exc:  # not fatal: searches degrade honestly
+                    get_logger().warning("reranker_warmup_failed", error=type(exc).__name__)
+        get_logger().info("ingest_finished", seeded=seeded, documents=existing, **report)
     finally:
         await close_pool()
 

@@ -49,7 +49,7 @@ export function AppLayout() {
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 sm:px-8">
           <div className="flex items-center gap-6">
             <Logo />
-            <nav aria-label="Principal" className="hidden gap-4 sm:flex">
+            <nav aria-label={t("app.nav")} className="hidden gap-4 sm:flex">
               {(account !== null ? linksByRole[account.role] : []).map((link) => (
                 <NavLink
                   key={link.to}
@@ -83,6 +83,24 @@ export function AppLayout() {
             ) : null}
           </div>
         </div>
+        {account !== null ? (
+          <nav
+            aria-label={t("app.navMobile")}
+            className="flex gap-4 overflow-x-auto border-t border-line px-4 py-2 sm:hidden"
+          >
+            {linksByRole[account.role].map((link) => (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                className={({ isActive }) =>
+                  `whitespace-nowrap text-label ${isActive ? "text-brand" : "text-ink-500 hover:text-ink-700"}`
+                }
+              >
+                {t(`nav.${link.key}`)}
+              </NavLink>
+            ))}
+          </nav>
+        ) : null}
       </header>
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-8">
         <Outlet />

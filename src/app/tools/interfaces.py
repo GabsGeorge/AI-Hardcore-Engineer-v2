@@ -182,9 +182,17 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Settlements (receivables) of the current merchant whose sale date or payment date"
         " (expected_date) falls in the window."
     ),
-    "diagnose_terminal": "Status and suggested checks of the current merchant's terminals.",
+    "diagnose_terminal": (
+        "Connectivity status, last error and suggested checks of the current merchant's"
+        " terminals. For a machine that does not connect, turn on or work; not for a sale the"
+        " machine showed as declined (use get_recent_transactions with status=declined)."
+    ),
     "lookup_decline_code": "Meaning and recommended action for a card decline code.",
-    "get_recent_transactions": "Recent sales of the current merchant, optionally only declined.",
+    "get_recent_transactions": (
+        "Recent sales of the current merchant. With status=declined it returns the declined"
+        " sales and their decline_code: use it when the machine shows a declined/refused"
+        " transaction error, then explain the code with lookup_decline_code."
+    ),
     "get_customer_profile": "Plan and settlement settings of the current merchant.",
     "create_ticket": "Open a ticket for a human operator.",
     "request_action_approval": "Ask a human operator to approve an action with side effects.",

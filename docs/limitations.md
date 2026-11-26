@@ -1,20 +1,20 @@
 # Limitações aceitas (`shortcut:`) e trade-offs (T178)
 
-Nesta entrega, três decisões conscientes trocam robustez máxima por simplicidade/custo.
+Decisões conscientes que trocam robustez máxima por simplicidade/custo, e o que ficou de fora.
 Cada item lista **onde**, **o que** e **o caminho de evolução**.
 
 ---
 
-## 1. Rate limit em janela fixa (processo-local)
+## 1. Rate limit por usuário em Redis (janela deslizante)
 
 - **Onde**: [src/app/api/limits.py](../src/app/api/limits.py)
-- **O que**: contador por `user_id` com `INCR` + `EXPIRE` em Redis, janela fixa de 60 s.
-- **Consequência**: na troca de minuto, um lojista pode disparar **até 2× o limite em uma
-  janela deslizante de 60 s** (as duas pontas do minuto).
-- **Risco aceito**: baixo. O limite por si só é defensivo, não contratual, e o perfil de uso
-  pessoa-máquina não aproveita essa borda.
-- **Evolução**: trocar por "sliding window log" ou "token bucket" quando o tráfego crescer.
-  A interface do módulo não muda — só a implementação de `check_rate_limit`.
+- **O que**: até então era um contador por minuto fixo, e uma rajada que atravessava a virada do
+  minuto passava com até 2× o limite (o QA independente viu 35/35 aceitas, QA-027). Agora é uma
+  janela deslizante de 60 s (sorted set por `user_id`); pedido recusado não conta, e o
+  `Retry-After` é o instante em que o pedido mais antigo sai da janela. Teste:
+  `tests/security/test_rate_limit.py::test_burst_across_the_minute_boundary_is_limited`.
+- **Limite que fica**: é por `user_id` (`users.id`). Todas as contas de operador/admin agem como o
+  mesmo usuário seed (ver §13), então dividem o mesmo balde.
 
 ## 2. Circuit breaker in-process
 
@@ -61,6 +61,132 @@ a quebrar a CI. A lista é curta por desenho.
 - **Evidência de monitoramento**: a CI roda `trivy fs` em cada PR; qualquer CVE nova HIGH ou
   CRITICAL que não esteja aqui quebra o pipeline.
 
+## 5. Classificador de entrada fail-open
+
+- **Onde**: `src/app/guardrails/input.py::_classify`.
+- **O que**: o classificador LLM (`input_guard`) é a terceira barreira do guardrail de entrada.
+  Se o LLM falha (timeout, erro da API, saída inválida), `_classify` devolve `None` e a pergunta
+  **segue** como `pass`: a heurística (segunda barreira) já rodou, mas nada mais bloqueia.
+- **Por que é aceitável aqui**: a defesa que importa não depende do classificador.
+  (1) A identidade vem só do token (ADR 0005), então nenhuma frase troca o cliente consultado;
+  (2) cada agente só chama as tools da sua allowlist, que leem o cliente de `config`, nunca do
+  texto; (3) ações com efeito colateral exigem aprovação do operador; (4) o guardrail de saída
+  re-mascara PII, reescreve promessas financeiras e barra respostas sem base (grounding). Com o
+  LLM fora, um ataque de prompt injection que escape da heurística chega ao supervisor, mas não
+  ganha acesso a dados de outro cliente nem executa ação.
+- **Caminho fail-closed**: quando `_classify` devolver `None`, marcar `input:blocked` (ou
+  `degraded_response` com "tente de novo") e contar em `getnet_guardrail_blocks_total{kind="classifier_unavailable"}`;
+  ligar por variável (`INPUT_GUARD_FAIL_CLOSED=1`) para não derrubar o atendimento quando o
+  provedor do LLM oscila. Custo: indisponibilidade do LLM vira indisponibilidade do chat.
+
+## 6. Canais SSE sem reconexão manual
+
+- **Onde**: `apps/web/src/lib/sse.ts`.
+- **O que**: o POST do chat (`/v1/chat/stream`) não reconecta: se o fluxo cai, a tela avisa
+  "resposta interrompida" e o lojista reenvia; não há desduplicação por `trace_id` entre
+  tentativas (T056 desmarcada). O canal de eventos da conversa usa a reconexão nativa do
+  `EventSource`; quando o navegador desiste (HTTP 401/403/404/429), o canal fica fechado até o
+  lojista recarregar a conversa.
+- **Evolução**: retomar o POST por `trace_id` exigiria guardar o resultado do turno no servidor
+  (o `Idempotency-Key` já faz isso para `/v1/chat`).
+
+## 7. Testes planejados que não existem
+
+A auditoria de 2026-11-24 desmarcou em `specs/*/tasks.md` as tasks cujo teste não existe:
+contrato de `/v1/auth/*` por schemathesis (T036), verificação de e-mail com token usado/expirado
+(T038), listagem de sessões (T039, parcial), "o mesmo link de reset não serve de novo" (T040,
+parcial), métricas/spans de auth (T035), chat E2E com login e api reais fora do HITL (T054,
+parcial) e o arquivo de roteiros dos 10+8 cenários (T126). O comportamento existe no código;
+falta o teste que o prove. O E2E de privacidade (T080) foi feito em 2026-11-26, depois que o QA
+independente mostrou que a tela era um placeholder; a listagem de sessões (T039) ganhou teste de
+integração para o lojista vinculado (QA-060), mas a task continua parcial.
+
+## 8. Golden set abaixo do gate na rota exata
+
+- **Onde**: [docs/reports/eval.md](reports/eval.md) (run de 2026-11-25, saída bruta em
+  `docs/reports/data/`).
+- **O que**: com a checagem de rota **exata** (B1), 3 passagens deram **88,3% de média e 85% de
+  mínimo** (gate 95%). `sc-02-knowledge-pix` falha sempre; `sc-13-en-fanout` e
+  `sc-20-fanout-crediario` falham em 2 de 3.
+- **Causa medida**: o supervisor despacha certo; o agente de conhecimento não acha na base as
+  taxas do Pix para PJ nem as do crediário, responde com confiança 0,2 e a política escala para um
+  humano. No fan-out, a resposta correta do suporte se perde porque o turno inteiro escala.
+- **Não feito de propósito**: afrouxar a checagem, baixar `CONFIDENCE_ESCALATE_HARD` ou mudar o
+  gabarito.
+- **Evolução**: indexar a fonte oficial dessas taxas, se publicada; no fan-out, sintetizar as
+  partes com base e escalar só a parte sem base.
+
+## 9. Itens recomendados não feitos (C1, C2)
+
+- **C1 — juiz em lote**: `evals/judge_batch.py` não foi rodado nesta rodada; não há faithfulness /
+  relevância média por tipo de cenário publicada além do juiz online amostrado em produção.
+- **C2 — holdout**: não existe `evals/holdout.yaml`. As métricas de retrieval publicadas
+  (recall@5 0,798 etc., ADR 0003) vêm do mesmo conjunto usado para calibrar o limiar
+  `RAG_DENSE_THRESHOLD`, então podem estar otimistas; não há número fora da calibração.
+
+## 10. Classificador de entrada barra frases legítimas
+
+- **Onde**: `prompts/input_guard.md` (papel `input_guard`), medido por `evals/guard_rates.py`.
+- **Antes**: 16 de 34 frases legítimas da suíte bloqueadas (2026-11-25) e 13 de 32 das frases do
+  QA independente (2026-11-26, QA-015).
+- **O que mudou**: o prompt separa "ignore/esqueça/finja" dirigido às regras (ataque) do dirigido
+  à própria pergunta (legítimo), trata documento com possessivo ("do meu CNPJ") como do próprio
+  lojista e recebe o turno anterior para entender continuações curtas. Os exemplos do prompt são
+  paráfrases; as frases do QA ficaram fora dele e servem de validação.
+- **Agora** (modelo real, 2026-11-26): **38/38** ataques bloqueados; **12/34** frases da suíte
+  (a maioria com CPF/CNPJ de cliente na frase, que o prompt trata como risco de IDOR de
+  propósito) e **2/32** frases do QA ("mostre as transações do CNPJ da minha empresa", "Show me
+  my last transactions"). A meta de ≤ 5% ainda não é atingida no conjunto do QA (6%).
+- **Evidência**: [reports/data/guard-rates-2026-11-26.json](reports/data/guard-rates-2026-11-26.json),
+  [reports/qa-e2e-resposta.md](reports/qa-e2e-resposta.md).
+
+## 11. Latência acima do SLO com o modelo real
+
+- **Onde**: grafo inteiro (`gpt-4o-mini` em até 6 chamadas por turno: guardrail de entrada,
+  supervisor, especialistas, síntese, guardrail de saída).
+- **O que**: o QA independente (2026-11-26) mediu p95 de 17,7 s (simples) e 18,4 s (composto) com
+  20 usuários × 5 min, e p95 de 10–20 s só com o tráfego funcional; na carga da rodada 3
+  (QA-R3-013) o p95 foi 28,3 s (simples) e 27,3 s (composto), com 0 erros em 75 pedidos (a rodada
+  4 não repetiu a carga). A meta é 8 s / 15 s (QA-037, QA-038). As correções desta rodada não reduzem chamadas de LLM; o painel e o alerta de
+  latência agora cobrem também `/v1/chat/stream` (QA-078), então o desvio fica visível.
+- **Evolução**: paralelizar o guardrail de entrada com o supervisor, pular a síntese quando há
+  um só especialista (já feito) e usar um modelo menor para o `input_guard`; medir de novo com
+  `deploy/k6/chat.js` e 20 tokens.
+
+## 12. `X-Real-IP` confiável só atrás do nginx
+
+- **Onde**: `_client_ip` em `src/app/api/auth_endpoints.py`.
+- **O que**: o limite de login/cadastro por IP lê `X-Real-IP`, que o nginx preenche. Quem fala
+  direto com a porta 8000 pode forjar o cabeçalho (QA-059). A porta 8000 agora é publicada só em
+  `127.0.0.1` (`docker-compose.yml`), então só quem já está na máquina consegue isso; o limite por
+  e-mail não depende do IP.
+- **Evolução**: lista de proxies confiáveis (`TRUSTED_PROXIES`) e uso do `X-Real-IP` só quando o
+  par TCP é o nginx.
+
+## 13. Textos que seguem o idioma da conversa, não o da interface
+
+- **O que**: o resumo do chamado na fila, o prefixo "Nosso atendente respondeu:" e os alvos da
+  auditoria (`account:acc_...`) são dados gravados no idioma da conversa (ou identificadores),
+  não textos da interface. Com a UI em inglês, uma conversa em português continua aparecendo em
+  português (QA-067, QA-069, QA-070). Os textos da interface (botões, rótulos, resultado da
+  auditoria) foram traduzidos.
+- **Também**: todas as contas web de operador/admin agem como o primeiro `users.id` seed do papel
+  (`_seed_user_for_role`), então a auditoria e o rate limit não distinguem dois operadores.
+
+## 14. Guardrail de saída ainda troca parte das respostas
+
+- **Onde**: `src/app/guardrails/output.py` (papel `output_guard`, `prompts/grounding.md`).
+- **O que**: na revalidação do QA (2026-11-26, 38 turnos com o modelo real) 7 respostas foram
+  trocadas por "não encontrei base suficiente". A causa principal do QA (compostas julgadas sem os
+  dados da conta) foi corrigida; dos 7 que sobraram, uns são acertos (número ou preço diferente da
+  passagem) e o caso do WhatsApp é um falso positivo conhecido do `gpt-4o-mini` como verificador.
+  Na rodada 3 do QA o S01 em inglês (Get Clássica × Get Smart) foi trocado uma vez; repetido 10
+  vezes em seguida com a mesma pergunta, passou nas 10 com fonte. É o mesmo falso positivo
+  intermitente, não um defeito de recuperação.
+- **Evolução**: verificador com modelo maior, ou checagem por afirmação (quebrar a resposta em
+  frases e checar cada uma contra a passagem citada), medindo acertos e falsos positivos juntos.
+- **Evidência**: [reports/qa-e2e-resposta.md](reports/qa-e2e-resposta.md).
+
 ---
 
 ## O que NÃO é shortcut
@@ -71,5 +197,6 @@ a quebrar a CI. A lista é curta por desenho.
   dedicado em `tests/security/test_pii.py`.
 - **HITL**: `interrupt()` + `Command(resume=...)` **na mesma thread** e com a identidade do
   dono do ticket. Ver [ADR 0004](adr/0004-hitl-interrupt.md).
-- **Retrieval híbrido**: BM25 + densa + RRF + rerank são obrigatórios no caminho principal
-  (não há "shortcut" aqui). Ver [ADR 0003](adr/0003-busca-hibrida.md).
+- **Retrieval**: o padrão é a busca densa (`RAG_STRATEGY=dense`, limiar 0,40) sem reranker
+  (`SKIP_RERANKER=1` no compose); o pipeline híbrido BM25 + densa + RRF + rerank existe e é
+  testado, mas é opcional (`RAG_STRATEGY=hybrid_rerank`). Ver [ADR 0003](adr/0003-busca-hibrida.md).

@@ -12,7 +12,7 @@ contract literals for the ``input`` field are only ``pass | masked | blocked``.
 import re
 from typing import Any, Literal
 
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from app.core.llm import get_model
@@ -32,28 +32,47 @@ class InputGuardResult(BaseModel):
 
 
 # Heuristics (REQ-GR-01): short-circuit the loudest attacks without any LLM call. These cover
-# ignore-the-rules, roleplay, prompt-extraction and the encoded-instructions families. The
-# regexes stay generous on common PT/EN wordings; the LLM classifier handles the rest.
+# ignore-the-rules, roleplay, prompt-extraction and the encoded-instructions families.
+#
+# Every "ignore / forget / disregard" and "act as / pretend" pattern needs a TARGET (the rules,
+# the instructions, the prompt, the token, an unrestricted persona...). Merchants write
+# "Ignore the previous message, I meant Pix" or "Can you act as my guide?" all the time; the
+# verb alone is not an attack (tests/unit/test_input_guardrail_false_positives.py).
+#
+# There is no heuristic for CPF/CNPJ/e-mail in the text: identity comes only from the token
+# and the tools never accept another customer (ADR 0005), so a document number in a sentence
+# is not an IDOR and blocking it only hurt legitimate merchants ("Mostre as transações do CNPJ
+# da minha empresa"). The LLM classifier still sees every message.
+_INSTRUCTION_TARGET = (
+    r"(regras|regra|instru[cç][õo]es|instru[cç][ãa]o|diretrizes|orienta[cç][õo]es|"
+    r"pol[ií]ticas|system\s+prompt|prompt|rules|instructions|guidelines|directives|policies|"
+    r"token|identidade|identity|authenticated\s+user|usu[áa]rio\s+autenticado|"
+    r"(?:everything|tudo)\s+(?:above|acima))"
+)
 _INJECTION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(
-        r"ignor[ea]\s+(as\s+)?(regras|instru[cç][õo]es|todas|all|the|previous|prior|anterior)",
+        r"\b(ignor[ea]|ignore|desconsidere|disregard|esque[cç]a|forget)\b"
+        r"(?:\s+[\w'’]+){0,4}?\s+" + _INSTRUCTION_TARGET + r"\b",
         re.IGNORECASE,
     ),
     re.compile(
-        r"desconsidere\s+(as|todas|a|o)?\s*(regras|instru[cç][õo]es)",
+        r"\b(finja|pretenda|pretend|act\s+as|aja\s+como|roleplay|"
+        r"a\s+partir\s+de\s+agora\s+(?:aja|voc[eê]|seja))\b.{0,60}?"
+        r"\b(sem\s+(?:regras|restri[cç][õo]es|filtros|limites)|"
+        r"without\s+(?:rules|restrictions|filters|limits)|no\s+(?:rules|restrictions|filters)|"
+        r"dan|jailbr\w*|dev\s+mode|developer\s+mode|modo\s+desenvolvedor|unrestricted|"
+        r"irrestrit\w*|ceo|presidente|diretor\w*|administrador|administrator|admin|"
+        r"system|sistema)\b",
+        re.IGNORECASE | re.DOTALL,
+    ),
+    # Identity override in plain words: "eu sou o cliente2024", "Pretend I am cliente2024".
+    re.compile(
+        r"\b(eu\s+sou|sou|i\s+am|i'm)\s+(?:o\s+|a\s+)?"
+        r"(cliente|operador|operator|admin|administrador|lojista|merchant)\s*\d+",
         re.IGNORECASE,
     ),
     re.compile(
-        r"esque[cç]a\s+(as|tudo|todas|everything|all)",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"forget\s+(everything|all|the|prior|previous|above)",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"(finja|pretenda|pretend|act\s+as|aja\s+como|a\s+partir\s+de\s+agora\s+aja)\s+"
-        r"(ser|que|a|an|o|um|uma|like|to\s+be)?",
+        r"\b(obey\s+only\s+me|obede[cç]a\s+(?:s[oó]\s+)?a\s+mim)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -62,11 +81,14 @@ _INJECTION_PATTERNS: list[re.Pattern[str]] = [
         re.IGNORECASE,
     ),
     re.compile(
-        r"(mostre|revele|reveal|print|exiba|repita|repeat)\s+.{0,40}?"
-        r"(system\s+prompt|prompt\s+do\s+sistema|instru[cç][õo]es\s+(do\s+sistema|internas)|"
-        r"internal\s+(rules|instructions)|regras\s+(do\s+sistema|internas)|"
+        r"\b(mostre|revele|reveal|print|exiba|repita|repeat|show|display|tell\s+me|diga)\b"
+        r"\W+.{0,40}?"
+        r"(system\s+prompt|system\s+message|prompt\s+do\s+sistema|"
+        r"instru[cç][õo]es\s+(do\s+sistema|internas|iniciais|ocultas)|"
+        r"internal\s+(rules|instructions)|regras\s+(do\s+sistema|internas|iniciais|ocultas)|"
+        r"(initial|hidden|original)\s+(rules|instructions|prompt)|"
         r"your\s+(system\s+)?(prompt|instructions|rules)|suas\s+(instru[cç][õo]es|regras))",
-        re.IGNORECASE,
+        re.IGNORECASE | re.DOTALL,
     ),
     re.compile(
         r"nova\s+(regra|instru[cç][ãa]o)\s*(do\s+sistema)?\s*[:,]",
@@ -81,21 +103,6 @@ _INJECTION_PATTERNS: list[re.Pattern[str]] = [
         r"\b(base64|rot13)\s*[:,]|\b(em\s+rot13|em\s+base64|in\s+base64|in\s+rot13)\b",
         re.IGNORECASE,
     ),
-    # IDOR por identificador de terceiro: menção explícita a dados "do cliente/usuário/lojista
-    # CPF/CNPJ/e-mail" ou verbo de consulta + CPF/CNPJ. O guardrail de identidade (REQ-SEC-02)
-    # já cobre `user_id` divergente no payload, mas o atacante pode tentar via linguagem
-    # natural com um documento no texto.
-    re.compile(
-        r"\b(do|da|de|from|of|belonging\s+to|para)\s+"
-        r"(cliente|usu[áa]rio|customer|merchant|user|conta|account|lojista|outro|other)\b"
-        r".{0,40}?\b(cpf|cnpj|documento|document|e-?mail)\b",
-        re.IGNORECASE | re.DOTALL,
-    ),
-    re.compile(
-        r"\b(mostre|exiba|liste|consulte|busque|traga|show|display|list|get|fetch|"
-        r"retrieve|lookup|look\s+up|pull\s+up)\b.{0,80}?\b(cpf|cnpj)\b.{0,10}?\d{3}",
-        re.IGNORECASE | re.DOTALL,
-    ),
 ]
 
 
@@ -103,14 +110,31 @@ def _heuristic_hit(text: str) -> bool:
     return any(p.search(text) for p in _INJECTION_PATTERNS)
 
 
-async def _classify(text: str) -> Classification | None:
+_CONTEXT_CHARS = 400
+
+
+def _previous_turn(messages: list[Any]) -> str:
+    """The turn before the latest message, for follow-ups such as "E quanto custa?" or "And on
+    debit?" that only make sense with it (QA-014). Data for the classifier, never a source of
+    instructions: the classifier is told so and only the latest message is classified."""
+    earlier = messages[:-1]
+    reply = next((m for m in reversed(earlier) if isinstance(m, AIMessage)), None)
+    question = next((m for m in reversed(earlier) if isinstance(m, HumanMessage)), None)
+    if reply is None or question is None:
+        return ""
+    q, a = str(question.content)[:_CONTEXT_CHARS], str(reply.content)[:_CONTEXT_CHARS]
+    q, a = (s.replace("<", "&lt;").replace(">", "&gt;") for s in (q, a))
+    return f"<previous_turn>\nMerchant: {q}\nAssistant: {a}\n</previous_turn>\n\n"
+
+
+async def _classify(text: str, context: str = "") -> Classification | None:
     """One LLM call max. Fails open on error so the whole suite does not depend on the API."""
     try:
         model = get_model("input_guard").with_structured_output(InputGuardResult)
         result = await model.ainvoke(
             [
                 SystemMessage(content=load_prompt("input_guard")),
-                HumanMessage(content=text),
+                HumanMessage(content=f"{context}<latest_message>\n{text}\n</latest_message>"),
             ]
         )
     except Exception:
@@ -139,7 +163,8 @@ async def input_guardrail(state: AgentState) -> dict[str, Any]:
         return update
 
     # Barrier 3: structured-output classifier (bounded: one call max).
-    classification = await _classify(text) if text else None
+    context = _previous_turn(list(state.get("messages") or []))
+    classification = await _classify(text, context) if text else None
     if classification in ("injection", "out_of_scope"):
         update["guardrail_flags"] = ["input:blocked"]
         GUARDRAIL_BLOCKS.labels("input", classification).inc()

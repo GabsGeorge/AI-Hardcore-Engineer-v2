@@ -7,7 +7,7 @@ const tones: Record<Tone, string> = {
   success: "bg-state-success/10 text-state-success",
   warning: "bg-state-warning/10 text-state-warning",
   danger: "bg-state-danger/10 text-state-danger",
-  brand: "bg-brand-soft text-brand",
+  brand: "bg-brand-soft text-brand-pressed",
 };
 
 export function StatusBadge({ tone = "neutral", children }: { tone?: Tone; children: string }) {
