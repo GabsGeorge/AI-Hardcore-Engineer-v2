@@ -148,3 +148,24 @@ Os casos 3.1.c com o cookie do `merchant_a` deram 401 na nova passagem porque a 
 harness se perdeu quando o Redis foi reiniciado no teste de falhas (o próprio relatório registra
 isso). Renovar exige o passo `accounts` do harness; os mesmos casos com Bearer passaram.
 
+
+## Rodada 4 (QA em `82a941d`, relatório na branch `qa/e2e`, commit `b2cc265`)
+
+O QA re-testou os 18 achados da rodada 3, uma fase por vez, com tokens e sessões renovados.
+Resultado: 0 Crítico, 0 Alto, 0 Médio, 4 Baixo.
+
+| Achado R3 | Resultado R4 |
+|---|---|
+| QA-R3-001 rate limit (3.8.a) | PASS: 30 × 200 e depois 429 com `retry-after: 58` |
+| QA-R3-002 idempotência (4.4.a) | PASS: `new_conversations=1`, mesmo trace |
+| QA-R3-005 403 (3.1.b) | PASS: conversas 761→761 |
+| QA-R3-004 K06 | PASS: aviso de handoff no idioma da conversa |
+| QA-R3-003 S01.en | PASS: resposta com fonte |
+| QA-R3-006–011 axe | PASS: 0 violações |
+| QA-R3-015–019 i18n | PASS em `/admin/accounts`; INFO no resto (dados, §13) |
+
+Os 4 Baixo que sobram são limitações já registradas em [limitations.md](../limitations.md):
+FP do guardrail de entrada em 2/32 = 6,2% contra a meta de ≤ 5% (§10), p95 acima do SLO (§11),
+dados exibidos no idioma da conversa (§13) e o harness não achar o ticket novo como primeiro da
+fila em 2.1.b (dados de rodadas anteriores na fila, não falha da fila). No critério 10/10 do QA
+ficaram 6 de 8 itens; os 2 que faltam são justamente §10 e §11.

@@ -145,8 +145,9 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
 - **Onde**: grafo inteiro (`gpt-4o-mini` em até 6 chamadas por turno: guardrail de entrada,
   supervisor, especialistas, síntese, guardrail de saída).
 - **O que**: o QA independente (2026-11-26) mediu p95 de 17,7 s (simples) e 18,4 s (composto) com
-  20 usuários × 5 min, e p95 de 10–20 s só com o tráfego funcional; a meta é 8 s / 15 s
-  (QA-037, QA-038). As correções desta rodada não reduzem chamadas de LLM; o painel e o alerta de
+  20 usuários × 5 min, e p95 de 10–20 s só com o tráfego funcional; na carga da rodada 3
+  (QA-R3-013) o p95 foi 28,3 s (simples) e 27,3 s (composto), com 0 erros em 75 pedidos (a rodada
+  4 não repetiu a carga). A meta é 8 s / 15 s (QA-037, QA-038). As correções desta rodada não reduzem chamadas de LLM; o painel e o alerta de
   latência agora cobrem também `/v1/chat/stream` (QA-078), então o desvio fica visível.
 - **Evolução**: paralelizar o guardrail de entrada com o supervisor, pular a síntese quando há
   um só especialista (já feito) e usar um modelo menor para o `input_guard`; medir de novo com

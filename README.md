@@ -358,7 +358,8 @@ docker compose --profile load run --rm -e AUTH_TOKENS="${TOKENS}" k6 run /script
 
 Thresholds de bloqueio: p95 simples < 8 s, composto < 15 s, erros < 1 %. Na rodada do QA
 independente (2026-11-26, 20 usuários × 5 min, `gpt-4o-mini`) o p95 ficou em 17,7 s (simples) e
-18,4 s (composto), acima da meta: ver [docs/limitations.md](docs/limitations.md) §11.
+18,4 s (composto); na carga da rodada 3 do mesmo QA, 28,3 s e 27,3 s, sem erros (0/75). Acima da
+meta nas duas: ver [docs/limitations.md](docs/limitations.md) §11.
 
 ---
 
@@ -578,7 +579,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
   ataques) e libera a pergunta se o LLM falhar (fail-open, compensado pela
   identidade só no token e pelo guardrail de saída).
 - Circuit breaker por processo; alguns testes planejados não existem.
-- Latência com o modelo real acima do SLO (p95 de 17,7 s com 20 usuários no QA independente).
+- Latência com o modelo real acima do SLO (p95 de 17,7 s a 28,3 s nas rodadas do QA independente).
 - Respostas do QA independente (2026-11-26), achado por achado:
   [docs/reports/qa-e2e-resposta.md](docs/reports/qa-e2e-resposta.md).
 
