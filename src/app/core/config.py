@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     retention_audit_days: int = Field(365, ge=1)
 
     eval_sample_rate: float = Field(0.10, ge=0, le=1)
+    # The ingest job skips crawling when the knowledge base already has documents; set to 1 to
+    # re-crawl on purpose (INGEST_REFRESH=1 docker compose run --rm ingest).
+    ingest_refresh: bool = False
     otel_exporter_otlp_endpoint: str = ""
     metrics_port: int = Field(9100, ge=0)  # internal only; 0 disables the exporter
 

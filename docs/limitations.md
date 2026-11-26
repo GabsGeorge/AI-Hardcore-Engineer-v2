@@ -99,6 +99,41 @@ parcial), métricas/spans de auth (T035), E2E de privacidade (T080), chat E2E co
 reais fora do HITL (T054, parcial) e o arquivo de roteiros dos 10+8 cenários (T126). O
 comportamento existe no código; falta o teste que o prove.
 
+## 8. Golden set abaixo do gate na rota exata
+
+- **Onde**: [docs/reports/eval.md](reports/eval.md) (run de 2026-11-25, saída bruta em
+  `docs/reports/data/`).
+- **O que**: com a checagem de rota **exata** (B1), 3 passagens deram **88,3% de média e 85% de
+  mínimo** (gate 95%). `sc-02-knowledge-pix` falha sempre; `sc-13-en-fanout` e
+  `sc-20-fanout-crediario` falham em 2 de 3.
+- **Causa medida**: o supervisor despacha certo; o agente de conhecimento não acha na base as
+  taxas do Pix para PJ nem as do crediário, responde com confiança 0,2 e a política escala para um
+  humano. No fan-out, a resposta correta do suporte se perde porque o turno inteiro escala.
+- **Não feito de propósito**: afrouxar a checagem, baixar `CONFIDENCE_ESCALATE_HARD` ou mudar o
+  gabarito.
+- **Evolução**: indexar a fonte oficial dessas taxas, se publicada; no fan-out, sintetizar as
+  partes com base e escalar só a parte sem base.
+
+## 9. Itens recomendados não feitos (C1, C2)
+
+- **C1 — juiz em lote**: `evals/judge_batch.py` não foi rodado nesta rodada; não há faithfulness /
+  relevância média por tipo de cenário publicada além do juiz online amostrado em produção.
+- **C2 — holdout**: não existe `evals/holdout.yaml`. As métricas de retrieval publicadas
+  (recall@5 0,798 etc., ADR 0003) vêm do mesmo conjunto usado para calibrar o limiar
+  `RAG_DENSE_THRESHOLD`, então podem estar otimistas; não há número fora da calibração.
+
+## 10. Classificador de entrada barra frases legítimas
+
+- **Onde**: `prompts/input_guard.md` (papel `input_guard`), medido por `evals/guard_rates.py`.
+- **O que**: com o modelo real, o classificador bloqueia os 38 ataques da suíte, mas também **16
+  das 34 frases legítimas** de `tests/security/data/legit_phrases.yaml` (47%): correções do tipo
+  "ignore a mensagem anterior", perguntas com o CPF/CNPJ do próprio lojista e até "qual é o e-mail
+  de contato do suporte". A heurística (E1) já não barra essas frases; o bloqueio vem do LLM.
+- **Evidência**: [reports/data/guard-rates-2026-11-25.json](reports/data/guard-rates-2026-11-25.json).
+- **Evolução**: incluir exemplos negativos no prompt (correções de mensagem, documento do próprio
+  lojista, perguntas de contato) e medir de novo as duas taxas juntas, exigindo que o bloqueio dos
+  ataques continue ≥ 95%.
+
 ---
 
 ## O que NÃO é shortcut

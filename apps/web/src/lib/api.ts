@@ -41,8 +41,12 @@ async function parseError(response: Response): Promise<ApiError> {
   }
   const code = body?.error?.code ?? `http_${response.status}`;
   const message = body?.error?.message ?? response.statusText;
-  const retryHeader = response.headers.get("Retry-After");
-  const retryAfterSeconds = retryHeader ? Number(retryHeader) : undefined;
+  // Só a forma em segundos; uma data HTTP (ou lixo) vira `undefined`, nunca NaN.
+  const retrySeconds = Number(response.headers.get("Retry-After")?.trim() ?? "");
+  const retryAfterSeconds =
+    response.headers.has("Retry-After") && Number.isFinite(retrySeconds) && retrySeconds >= 0
+      ? Math.ceil(retrySeconds)
+      : undefined;
   return new ApiError(code, message, response.status, body, retryAfterSeconds);
 }
 
@@ -66,12 +70,14 @@ async function request<T>(
       headers.set("X-CSRF-Token", token);
     }
   }
+  // `init` primeiro: um `init.headers` do chamador já foi mesclado acima e não pode apagar o
+  // X-CSRF-Token nem o Content-Type montados aqui.
   const response = await fetch(path, {
+    ...init,
     method,
     credentials: "include",
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
-    ...init,
   });
   if (!response.ok) {
     throw await parseError(response);

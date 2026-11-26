@@ -31,7 +31,7 @@ docker compose --profile eval run --rm eval            # golden set
 |---|---|
 | Cenários do enunciado (10 × PT + 10 × EN) | **19/20 limpos** em uma passagem (resposta no idioma da pergunta, sem escalar, guardrails `pass/pass`) |
 | Perguntas de controle (3 + 1 extra, 5 execuções cada) | **20/20 seguras**: nenhuma resposta inventada, nenhuma falha interna; C2 corrigiu a premissa com a taxa real em 4/5 |
-| Golden set — acurácia de rota | **20/20 (100%)**, gate de 95% atendido; tools 5/5, handoff 3/3, guardrails 2/2 |
+| Golden set — acurácia de rota | **20/20 (100%)** em 17/11 com a regra antiga (subconjunto). Com a rota **exata** (2026-11-25, 3 passagens): **88,3% média, 85% mínimo**, abaixo do gate — ver [eval.md](eval.md) |
 | Golden set — PII | **1/1** (`sc-16` estabilizado depois da passagem de cenários; veja "Pendências") |
 
 **O resultado por pergunta não é determinístico.** Nesta passagem a pergunta não limpa foi: `09/pt`: grounding barrou.
@@ -143,7 +143,8 @@ negativa sobre a empresa ("A Getnet não aceita X") sem fonte que a diga é bloq
 
 ## Golden set (`evals/golden_set.yaml`, 21 cenários)
 
-Mesma passagem dos números acima; detalhe por cenário em [eval.md](eval.md).
+Números da passagem de 17/11, com a checagem antiga de rota por subconjunto. O run de 2026-11-25
+com a rota exata (88,3% de média, saída bruta versionada) está em [eval.md](eval.md).
 
 ```
 route       20/20

@@ -93,6 +93,10 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.21.5
+    # Caixa de entrada de desenvolvimento (links de verificação, convite e reset). Publicada só no
+    # loopback para o avaliador abrir http://localhost:8025 sem expor a porta na rede.
+    ports:
+      - "127.0.0.1:8025:8025"
     environment:
       MP_MAX_MESSAGES: "500"
       MP_SMTP_AUTH_ACCEPT_ANY: "true"

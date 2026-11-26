@@ -3,31 +3,78 @@
 Scenario-level eval contra a API rodando, com `OPENAI_API_KEY` real e `evals/golden_set.yaml`
 como gabarito. Executado por `evals/run_eval.py` (profile `eval` do compose).
 
-> **Auditoria 2026-11-24**: a saída bruta dos runs (stdout do `run_eval.py`) não está
-> versionada; os números abaixo são a transcrição feita no dia de cada run e não foram
-> re-executados nesta auditoria (exige `OPENAI_API_KEY` e Docker). O que foi conferido contra o
-> código: os 21 ids do golden set, o gate `TARGET_ROUTE_ACCURACY = 0.95` e o status atual dos
-> três achados de 2026-10-29 (seção "Achados"). A eval **não** roda no CI.
-
 ## Rodar
 
 ```bash
-cp .env.example .env   # preencher OPENAI_API_KEY, JWT_SECRET, GRAFANA_ADMIN_PASSWORD (./scripts/gen_grafana_password.sh)
-docker compose up -d --build api            # sobe api + postgres + redis + ingest
-docker compose --profile eval run --rm eval # posta cada cenario em /v1/chat e cobra o gabarito
+cp .env.example .env && bash scripts/bootstrap_env.sh   # depois, preencher OPENAI_API_KEY no .env
+docker compose up -d --build                             # api + postgres + redis + ingest + web
+docker compose --profile eval run --rm eval python evals/run_eval.py --runs 3
 ```
 
-O ingest hidrata a base com os seeds de `src/app/rag/sources.yaml` (PT + EN). Sem `OPENAI_API_KEY`
-valido, as embeddings nao sao geradas e o retriever fica vazio — a eval roda, mas cenarios de
-`knowledge` caem em `degraded_response`.
+O ingest hidrata a base com `src/app/rag/sources.yaml` (PT + EN) e a fonte curada. Sem
+`OPENAI_API_KEY` as embeddings não são geradas e os cenários de `knowledge` degradam.
 
-## Thresholds
+## Regras de pontuação (`evals/run_eval.py::check`)
 
-- `route accuracy` precisa ficar >= 95% (`run_eval.py:TARGET_ROUTE_ACCURACY`). Abaixo disso o
-  script sai com codigo 1. O CI nao roda a eval (gasta tokens); e um passo manual.
-- As outras metricas (tools, handoff, guardrails, pii) sao informativas no stdout.
+- **`route` é exata nos especialistas** (desde 2026-11-24, item B1): o conjunto de
+  `knowledge`/`support`/`escalation` visitados precisa ser **igual** ao esperado. Uma
+  especialista a mais (por exemplo `escalation` depois de uma resposta fraca) ou a menos reprova.
+  Nós de infraestrutura (`input_guardrail`, `summarize`, `supervisor`, `synthesize`,
+  `output_guardrail`) ficam fora. `[safe_response]` significa "guardrail de entrada bloqueou".
+  Antes era "subconjunto": rota com especialista a mais passava.
+- `tools_contains`, `handoff`, `guardrails_input`, `pii_masked` e **`has_sources`** (B2, antes
+  declarado no golden set e ignorado) são checados; uma expectativa desconhecida faz o eval
+  falhar com erro, nada é ignorado em silêncio.
+- Gate: média da rota exata ≥ 95%, senão o script sai com código 1. O CI não roda a eval (gasta
+  tokens).
 
-## Ultimo run
+## Run atual — 2026-11-25, 3 passagens, rota exata
+
+**Quando**: 2026-11-25 22:24–22:35 UTC · **Stack**: `docker compose up -d --build` com a
+configuração padrão (`RAG_STRATEGY=dense`, limiar 0,40, `SKIP_RERANKER=1`), base com 96 páginas /
+316 trechos, `gpt-4o-mini` + `text-embedding-3-small` · **Comando**: o de "Rodar" acima ·
+**Saída bruta**: [data/golden-set-2026-11-25.log](data/golden-set-2026-11-25.log) e
+[data/golden-set-2026-11-25.json](data/golden-set-2026-11-25.json).
+
+| Métrica | Run 1 | Run 2 | Run 3 | Média | Mínimo | Gate |
+|---|---|---|---|---|---|---|
+| **rota exata** | 18/20 | 17/20 | 18/20 | **88,3%** | **85,0%** | ≥ 95% ❌ |
+| tools | 5/5 | 5/5 | 5/5 | 100% | 100% | informativo |
+| has_sources | 4/4 | 4/4 | 4/4 | 100% | 100% | informativo |
+| handoff | 3/3 | 3/3 | 3/3 | 100% | 100% | informativo |
+| guardrails | 2/2 | 2/2 | 2/2 | 100% | 100% | informativo |
+| pii | 1/1 | 1/1 | 1/1 | 100% | 100% | informativo |
+
+**Resultado**: `FAIL: route accuracy 88% < 95%` (exit 1).
+
+- **Sempre falha**: `sc-02-knowledge-pix` ("Quais as taxas do Pix para pessoa jurídica?").
+- **Instáveis**: `sc-13-en-fanout` (2 de 3) e `sc-20-fanout-crediario` (2 de 3).
+
+### Investigação (o gate não foi ajustado)
+
+Em todas as falhas o **primeiro despacho do supervisor está certo** (`knowledge`, ou
+`knowledge` + `support` no fan-out); a especialista a mais é sempre `escalation`. Uma chamada de
+cada cenário na mesma stack (traces `13f4f2f1…`, `7bc82c4f…`, `aad6ad06…`) mostrou o porquê:
+
+- o agente de conhecimento busca (4× `search_knowledge_base`, todas `ok`) e responde com
+  **confiança 0,2**, que pelo prompt é a faixa de "não encontrei isso nas fontes": a base indexada
+  não traz **a tabela de taxas do Pix para PJ** nem **as taxas do crediário** (as páginas
+  recuperadas explicam como habilitar o Pix e como funciona o crediário, sem os números);
+- com uma resposta abaixo de `CONFIDENCE_ESCALATE_HARD` (0,40), `decide` escala para um humano em
+  vez de deixar o modelo inventar números — comportamento de projeto (falha segura);
+- nos fan-outs, a parte de **suporte responde certo** (`diagnose_terminal`,
+  `get_settlement_schedule` ok), mas a política escala o **turno inteiro** quando qualquer parte
+  fica abaixo de 0,40, e a resposta boa de suporte não chega ao lojista.
+
+Conclusão: não é erro de roteamento; é falta de conteúdo na base (taxas de Pix PJ e crediário)
+somada à política de escalar o turno inteiro. Ficou registrado em
+[docs/limitations.md](../limitations.md) §8 com estes números. Caminhos possíveis, não feitos
+nesta rodada: indexar a fonte oficial dessas taxas (se a Getnet publicar), e no fan-out sintetizar
+as partes boas e escalar só a parte sem base.
+
+## Run anterior (2026-11-17, regra antiga de subconjunto, mantido como histórico)
+
+> Números transcritos no dia, sem saída bruta versionada; a checagem de rota era "subconjunto".
 
 **Quando**: 2026-11-17
 **Stack**: stack do compose com o codigo desta branch, `--profile eval run --rm eval`, `OPENAI_API_KEY`
@@ -177,4 +224,5 @@ Os tres achados foram corrigidos antes do run de 2026-11-17 (acima).
 | Data       | route | tools | handoff | guardrails | pii | Observacao                                       |
 |------------|-------|-------|---------|------------|-----|-------------------------------------------------|
 | 2026-10-29 | 16/20 | 5/5   | 3/3     | 2/2        | 0/1 | Primeiro run com LLM real; 3 achados abertos    |
-| 2026-11-17 | 20/20 | 5/5   | 3/3     | 2/2        | 1/1 | Base com fonte curada (96 paginas); mesma passagem do smoke.md |
+| 2026-11-17 | 20/20 | 5/5   | 3/3     | 2/2        | 1/1 | Base com fonte curada (96 paginas); rota por subconjunto |
+| 2026-11-25 | 18/20, 17/20, 18/20 (exata) | 5/5 | 3/3 | 2/2 | 1/1 | 3 passagens; has_sources 4/4; saída bruta em data/ |

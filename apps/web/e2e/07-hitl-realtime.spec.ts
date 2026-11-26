@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 
 /**
@@ -23,6 +24,15 @@ async function signIn(browser: Browser, email: string): Promise<Page> {
   return page;
 }
 
+async function seriousA11yViolations(page: Page) {
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+    .analyze();
+  return results.violations
+    .filter((v) => v.impact === "serious" || v.impact === "critical")
+    .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(" ")).join(" | ")}`);
+}
+
 test("resposta do operador aparece no chat do lojista em até 5 s, sem recarregar", async ({
   browser,
 }) => {
@@ -39,6 +49,8 @@ test("resposta do operador aparece no chat do lojista em até 5 s, sem recarrega
   const banner = merchant.getByRole("status").filter({ hasText: /aguardando atendente/i });
   await expect(banner).toBeVisible({ timeout: 30_000 });
   await expect(merchant.getByLabel(/^mensagem/i)).toBeDisabled();
+  // C3: axe também no chat (com o banner de handoff aberto), não só no login.
+  expect(await seriousA11yViolations(merchant)).toEqual([]);
   const ticketId = UUID.exec((await banner.textContent()) ?? "")?.[0];
   expect(ticketId, "o banner mostra o número do chamado").toBeTruthy();
 
@@ -46,6 +58,7 @@ test("resposta do operador aparece no chat do lojista em até 5 s, sem recarrega
   const operator = await signIn(browser, OPERATOR);
   await operator.goto("/queue");
   await expect(operator.getByRole("heading", { name: /fila de atendimento/i })).toBeVisible();
+  expect(await seriousA11yViolations(operator)).toEqual([]); // C3: axe na fila do operador
   await operator.goto(`/queue/${ticketId}`);
   const reply = `Estorno aprovado (e2e ${Date.now()}).`;
   await operator.getByLabel(/resposta ao lojista/i).fill(reply);
