@@ -14,12 +14,15 @@ paths = [
     '''^tests/integration/test_me_delete_account\.py$''',
     '''^tests/integration/test_admin_invite\.py$''',
     '''^tests/integration/test_admin_link_merchant\.py$''',
+    '''^tests/integration/test_merchant_account_fixes\.py$''',
     '''^tests/contract/test_admin_api\.py$''',
     '''^tests/security/test_auth_enumeration\.py$''',
     '''^tests/security/test_admin_rbac\.py$''',
     '''^tests/security/test_admin_audit_no_pii\.py$''',
     '''^tests/security/test_csrf_middleware\.py$''',
     '''^apps/web/e2e/06-admin\.spec\.ts$''',
+    # Senha digitada no formulário de exclusão de conta (API mockada no Vitest).
+    '''^apps/web/src/features/privacy/PrivacyPage\.test\.tsx$''',
     # Contas de teste do E2E de HITL (só existem no docker-compose.test.yml).
     '''^tests/e2e_server\.py$''',
     '''^apps/web/e2e/07-hitl-realtime\.spec\.ts$''',
