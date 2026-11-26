@@ -199,7 +199,18 @@
       "activated": "Conta reativada.",
       "sendError": "Não foi possível concluir. Tente novamente.",
       "cancel": "Cancelar",
-      "confirm": "Confirmar"
+      "confirm": "Confirmar",
+      "roles": {
+        "merchant": "Lojista",
+        "operator": "Operador",
+        "admin": "Administrador"
+      },
+      "statuses": {
+        "pending": "Pendente",
+        "active": "Ativa",
+        "locked": "Bloqueada",
+        "deactivated": "Desativada"
+      }
     },
     "link": {
       "title": "Vincular lojista a estabelecimento",

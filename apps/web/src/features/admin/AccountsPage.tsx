@@ -83,7 +83,7 @@ export function AccountsPage() {
           >
             {ROLES.map((r) => (
               <option key={r || "any"} value={r}>
-                {r || t("admin.accounts.any")}
+                {r ? t(`admin.accounts.roles.${r}`) : t("admin.accounts.any")}
               </option>
             ))}
           </select>
@@ -97,7 +97,7 @@ export function AccountsPage() {
           >
             {STATUSES.map((s) => (
               <option key={s || "any"} value={s}>
-                {s || t("admin.accounts.any")}
+                {s ? t(`admin.accounts.statuses.${s}`) : t("admin.accounts.any")}
               </option>
             ))}
           </select>
@@ -133,7 +133,9 @@ export function AccountsPage() {
                     </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge tone="neutral">{acc.role}</StatusBadge>
+                    <StatusBadge tone="neutral">
+                      {t(`admin.accounts.roles.${acc.role}`)}
+                    </StatusBadge>
                     <StatusBadge
                       tone={
                         acc.status === "active"
@@ -143,7 +145,7 @@ export function AccountsPage() {
                             : "warning"
                       }
                     >
-                      {acc.status}
+                      {t(`admin.accounts.statuses.${acc.status}`)}
                     </StatusBadge>
                     {acc.status === "deactivated" ? (
                       <Button
@@ -264,8 +266,8 @@ function InviteDialog({
             value={role}
             onChange={(e) => setRole(e.target.value as "operator" | "admin")}
           >
-            <option value="operator">operator</option>
-            <option value="admin">admin</option>
+            <option value="operator">{t("admin.accounts.roles.operator")}</option>
+            <option value="admin">{t("admin.accounts.roles.admin")}</option>
           </select>
         </label>
       </div>

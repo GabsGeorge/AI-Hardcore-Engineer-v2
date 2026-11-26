@@ -9,9 +9,9 @@ na própria máquina — não há dependência de Python ou `make` no host.**
 
 > **Status**: spec **001** (multi-agent) com 179 de 180 tasks fechadas e spec **002-web-ui** com
 > 98 de 105; as 8 abertas são testes que faltam, listados em
-> [docs/limitations.md](docs/limitations.md) §7. Testes: **654** no backend (pytest: 347 de
-> unidade, 37 de contrato, 146 de integração, 104 de segurança, 20 de repositório/infra; 653
-> passam e 1 é pulado), **79** no frontend (Vitest) e **19** E2E (Playwright contra a stack real). Golden set com LLM real: rota
+> [docs/limitations.md](docs/limitations.md) §7. Testes: **659** no backend (pytest: 352 de
+> unidade, 37 de contrato, 146 de integração, 104 de segurança, 20 de repositório/infra; 658
+> passam e 1 é pulado), **98** no frontend (Vitest) e **19** E2E (Playwright contra a stack real). Golden set com LLM real: rota
 > exata **88,3%** de média em 3 passagens, abaixo do gate de 95% — causa e números em
 > [docs/reports/eval.md](docs/reports/eval.md). Quadros em
 > [specs/001-multi-agent-support/tasks.md](specs/001-multi-agent-support/tasks.md) e
@@ -94,12 +94,12 @@ teste consegue chamar a OpenAI ou o site da Getnet por acidente.
 
 | Camada | O que prova | Quantidade | Onde |
 |---|---|---|---|
-| Unidade | regras puras: `decide` do supervisor, máscara de PII, heurísticas do guardrail, chunking, RRF, checagem do eval, canal de eventos | 347 | `tests/unit/` |
+| Unidade | regras puras: `decide` do supervisor, máscara de PII, heurísticas do guardrail, chunking, RRF, checagem do eval, canal de eventos | 352 | `tests/unit/` |
 | Contrato | formato de `/v1/chat` e `/v1/chat/stream`, idempotência, validação, fuzz de payload | 37 | `tests/contract/` |
 | Integração do grafo | grafo, Postgres e Redis reais, com **LLM fake determinístico** | 146 | `tests/integration/` |
 | Segurança | IDOR, CSRF, RBAC, injeção direta/indireta/identidade, PII em logs e spans, limites | 104 | `tests/security/` |
 | Repositório/infra | Dockerfile, compose, observabilidade, coerência docs ↔ código, sem stubs, nginx | 20 | `tests/*.py` |
-| Frontend | componentes e hooks da SPA (Vitest + Testing Library) | 79 | `apps/web/src/**/*.test.ts(x)` |
+| Frontend | componentes e hooks da SPA (Vitest + Testing Library) | 98 | `apps/web/src/**/*.test.ts(x)` |
 | E2E da UI | navegador contra a stack real (web, api, Postgres, Redis, Mailpit); só o LLM roteirizado | 19 | `apps/web/e2e/` |
 | Eval com LLM real | golden set de 21 cenários, 3 passagens, rota exata | manual | [docs/reports/eval.md](docs/reports/eval.md) |
 
@@ -543,7 +543,7 @@ curl -s http://localhost:8000/v1/chat \
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
-# → 653 passed, 1 skipped (backend). Frontend: run --rm web-tests (79); E2E: run --rm web-e2e (19).
+# → 658 passed, 1 skipped (backend). Frontend: run --rm web-tests (98); E2E: run --rm web-e2e (19).
 ```
 
 ### 8. Usar a UI web

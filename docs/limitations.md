@@ -179,6 +179,9 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   trocadas por "não encontrei base suficiente". A causa principal do QA (compostas julgadas sem os
   dados da conta) foi corrigida; dos 7 que sobraram, uns são acertos (número ou preço diferente da
   passagem) e o caso do WhatsApp é um falso positivo conhecido do `gpt-4o-mini` como verificador.
+  Na rodada 3 do QA o S01 em inglês (Get Clássica × Get Smart) foi trocado uma vez; repetido 10
+  vezes em seguida com a mesma pergunta, passou nas 10 com fonte. É o mesmo falso positivo
+  intermitente, não um defeito de recuperação.
 - **Evolução**: verificador com modelo maior, ou checagem por afirmação (quebrar a resposta em
   frases e checar cada uma contra a passagem citada), medindo acertos e falsos positivos juntos.
 - **Evidência**: [reports/qa-e2e-resposta.md](reports/qa-e2e-resposta.md).

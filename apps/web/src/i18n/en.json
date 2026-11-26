@@ -199,7 +199,18 @@
       "activated": "Account reactivated.",
       "sendError": "Could not complete. Try again.",
       "cancel": "Cancel",
-      "confirm": "Confirm"
+      "confirm": "Confirm",
+      "roles": {
+        "merchant": "Merchant",
+        "operator": "Operator",
+        "admin": "Admin"
+      },
+      "statuses": {
+        "pending": "Pending",
+        "active": "Active",
+        "locked": "Locked",
+        "deactivated": "Deactivated"
+      }
     },
     "link": {
       "title": "Link merchant to establishment",

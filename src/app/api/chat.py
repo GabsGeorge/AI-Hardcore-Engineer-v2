@@ -77,11 +77,25 @@ def _flag(flags: list[str], stage: str, order: tuple[str, ...]) -> str:
     return next((v for v in order if v in present), "pass")
 
 
+# A turn that ends in a pending handoff has no synthesized reply (the graph is paused inside the
+# escalation node). Before QA-R3-004 the API returned `response: ""`: the web UI hides that empty
+# bubble behind the handoff banner, but an API client got nothing to show the merchant.
+HANDOFF_ACK = {
+    "pt": "Encaminhei sua conversa para um atendente humano. A resposta aparece aqui assim que "
+    "ele responder.",
+    "en": "I've passed your conversation to a human agent. Their reply will show up here as soon "
+    "as they answer.",
+}
+
+
 def build_response(state: dict[str, Any], conversation_id: UUID, trace_id: str) -> ChatResponse:
     results = state.get("results") or []
     ok = [r for r in results if not r.get("error")]
     flags = state.get("guardrail_flags") or []
     escalation = state.get("escalation") or {}
+    text = state.get("final_response") or ""
+    if not text and escalation.get("status") == "awaiting_human":
+        text = HANDOFF_ACK.get(state.get("language") or "pt", HANDOFF_ACK["pt"])
     output_flag = _flag(flags, "output", ("blocked", "rewritten"))
     sources: dict[str, dict[str, Any]] = {}
     # A reply the output guard replaced ("não encontrei base suficiente", a rewritten promise) is
@@ -93,7 +107,7 @@ def build_response(state: dict[str, Any], conversation_id: UUID, trace_id: str) 
             if is_http_url(src.get("url", "")):
                 sources.setdefault(src["url"], src)
     return ChatResponse(
-        response=state.get("final_response") or "",
+        response=text,
         conversation_id=conversation_id,
         route=[n for n in state.get("route_trace") or [] if n in _ROUTE_NODES],
         sources=list(sources.values()),

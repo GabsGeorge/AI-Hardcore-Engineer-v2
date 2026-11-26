@@ -128,3 +128,23 @@ saída não foi afrouxada.
 | QA-079, QA-089 | Contagem de testes no README desatualizada: números atualizados | README |
 | QA-080, QA-092 | `smoke_report` com resultados diferentes do `smoke.md`: o relatório registra rodadas datadas; a rodada desta revisão está na medição acima | — |
 | QA-091 | `curl 127.0.0.1:9100/metrics` só vale no modo local; com o compose a leitura é de dentro do container | `observability.md` |
+
+## Rodada 3 (QA em `554d9a3`, relatório na branch `qa/e2e`, commit `b6ed3b0`)
+
+Cada achado foi conferido primeiro nas evidências do próprio QA (`evidence/http/*.jsonl`,
+`evidence/results/*.jsonl`) e depois rodando de novo o comando do harness, **uma fase por vez**.
+
+| QA | Conclusão | O que mudou | Evidência |
+|---|---|---|---|
+| QA-R3-001 (3.8.a, Alto) | Não era falha da plataforma. Na rodada 3 vieram 30 × 200 e 5 × 429, todos com `retry-after: 60` (registrado em `evidence/http/3-security.jsonl`). O harness procurava `Retry-After` diferenciando maiúsculas e minúsculas; o uvicorn manda o nome em minúsculas, e o nome de cabeçalho HTTP não diferencia maiúsculas (RFC 9110 §5.1) | Nada na plataforma. No harness, a leitura do cabeçalho ignora maiúsculas (1 linha em `p3_security.py`) | `p3_security.py 3.8 --go`: 3.8.a PASS, `retry-after=58`; 3.8.b–d PASS |
+| QA-R3-002 (4.4.a, Alto) | Não era falha da plataforma. As duas chamadas com a mesma chave devolveram o mesmo `trace_id` (`543fc10d…`) e a mesma conversa. A segunda conversa contada era a S01.pt da fase 1, que rodava **em paralelo** com o mesmo lojista (`cliente1988`) | Nada | `p4_resilience.py idem --go`: 4.4.a PASS, `new_conversations=1`; 4.4.b e 4.4.c PASS |
+| QA-R3-005 (3.1.b) | Não era falha da plataforma. O 403 sai antes de criar conversa ou chamar o grafo (`src/app/api/chat.py`). As 3 conversas a mais eram S01.en (fase 1), 2.1-open (fase 2) e 4.4-1 (fase 4), criadas no mesmo minuto | Nada | `p3_security.py 3.1 --go` sozinho: 3.1.b PASS, `conversations 761→761`, 0 linhas do grafo no log |
+| QA-R3-004 (K06) | Era falha. Todo turno que termina em handoff (`awaiting_human`) devolvia `response: ""`. A tela escondia a bolha vazia atrás do aviso de fila, mas quem usa a API ficava sem texto. O K06 em si foi escalado, o que o próprio QA aceita como resposta certa | `build_response` devolve um aviso curto, no idioma da conversa, quando o turno para no handoff sem resposta sintetizada | `tests/unit/test_handoff_ack.py`; `p1_chat.py 1.4 --go`: K06 e K01 com o aviso em PT, K05 em EN |
+| QA-R3-003 (S01.en) | Falso positivo intermitente do guardrail de saída (`output: blocked`, confiança 0,85, 4 buscas na base). Repetido 10 vezes com a mesma pergunta em 2026-11-26, as 10 passaram com 2 ou 3 fontes | Nada; a régua não foi afrouxada | [limitations.md](../limitations.md) §14 |
+| QA-R3-006–011 (axe) | Era falha, mas não de `role`/`aria-label`: as violações eram todas `color-contrast`. O texto `#B45309` do selo "SLA estourado" sobre o próprio fundo âmbar a 10% dava 4,39:1; a fila lista até 100 tickets e todos os antigos estão com SLA vencido, daí os 100 nós. O mesmo selo aparece em `/history` ("aguardando atendente") e em `/admin/accounts` (conta pendente) | `state.warning` → `#9A4507` (≥ 5,2:1 no fundo tingido), `state.success` → `#0F6E27` (o anterior dava 4,43:1 sobre `surface-200`), selo `brand` com `brand-pressed` (era 3,79:1) | `apps/web/src/design/contrast.test.ts` (inclui um caso mostrando que a cor antiga reprovava) |
+| QA-R3-015–019 (i18n) | As palavras encontradas são dados, não textos da interface: prévia de mensagens do lojista no `/history`, resumos dos tickets (gerados no idioma da conversa) na `/queue` e alvos como `account:acc_…` na auditoria. Os arquivos `pt.json`/`en.json` não têm palavra do outro idioma nem chave faltando. A varredura achou, porém, textos fixos de verdade: papel e status da conta (`operator`, `active`) crus em `/admin/accounts` e o nome acessível do `Spinner` fixo em português | Papéis e status traduzidos (`admin.accounts.roles.*`, `admin.accounts.statuses.*`) e `Spinner` com `app.loading` | `apps/web/src/features/admin/AccountsPage.test.tsx` |
+
+Os casos 3.1.c com o cookie do `merchant_a` deram 401 na nova passagem porque a sessão salva pelo
+harness se perdeu quando o Redis foi reiniciado no teste de falhas (o próprio relatório registra
+isso). Renovar exige o passo `accounts` do harness; os mesmos casos com Bearer passaram.
+

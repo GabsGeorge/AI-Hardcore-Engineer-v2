@@ -245,7 +245,12 @@ components:
       type: object
       required: [response, conversation_id, route, sources, tools_used, confidence, handoff, guardrails, trace_id]
       properties:
-        response: { type: string }
+        response:
+          type: string
+          description: >-
+            The reply. When the turn stops at a pending handoff (handoff.status = awaiting_human)
+            there is no synthesized reply; the API returns a short notice in the conversation
+            language instead of an empty string.
         conversation_id: { type: string, format: uuid }
         route:
           type: array
