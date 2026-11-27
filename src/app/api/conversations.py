@@ -18,6 +18,7 @@ from app.api.schemas import Conversation, ConversationMessage, HandoffRef, Hando
 from app.core.errors import AppError, not_found
 from app.db import repo
 from app.db.pool import get_pool
+from app.observability.logging import get_logger
 
 router = APIRouter()
 
@@ -162,6 +163,12 @@ async def conversation_events(
             escalation=values.get("escalation") or {},
         )
 
+    def _diag(event: dict[str, str]) -> dict[str, str]:
+        get_logger().info(  # DIAG-SSE (temporário): cada evento enviado
+            "diag_sse_event", conversation_id=str(conversation_id), sse_id=event.get("id")
+        )
+        return event
+
     async def _generator() -> Any:
         """Cada evento leva um `id` estável, para o cliente descartar repetições quando o
         EventSource reconecta (o canal fecha a cada ~60 s e o navegador reabre sozinho)."""
@@ -174,6 +181,13 @@ async def conversation_events(
         # não podem voltar como se fossem a resposta do atendente.
         baseline = await _snapshot()
         last_ai_count = len(baseline.ai) if baseline is not None else 0
+        get_logger().info(  # DIAG-SSE (temporário): abertura do canal
+            "diag_sse_open",
+            conversation_id=str(conversation_id),
+            opened_status=opened_status,
+            baseline=last_ai_count,
+            escalation=(baseline.escalation if baseline is not None else None),
+        )
         replied_ticket: str | None = None  # ticket whose reply this channel already sent
         last_sla_announced: str | None = None  # ticket_id whose SLA breach we already told
         last_expired_announced: str | None = None
@@ -196,7 +210,7 @@ async def conversation_events(
                 if snapshot is not None and len(snapshot.ai) > last_ai_count:
                     last_ai_count = len(snapshot.ai)
                     replied_ticket = ticket
-                    yield _final_message(snapshot)
+                    yield _diag(_final_message(snapshot))
                 if current_status != last_status:
                     if current_status == "resolved" and replied_ticket != ticket:
                         if snapshot is None and graph is not None:
@@ -206,15 +220,17 @@ async def conversation_events(
                         if snapshot is not None and _reply_catch_up(snapshot, ticket):
                             last_ai_count = len(snapshot.ai)
                             replied_ticket = ticket
-                            yield _final_message(snapshot)
+                            yield _diag(_final_message(snapshot))
                     last_status = current_status
-                    yield {
-                        "event": "handoff_update",
-                        "id": f"handoff_update:{ticket}:{current_status or 'none'}",
-                        "data": json.dumps(
-                            {"status": current_status or "none", "ticket_id": ticket}
-                        ),
-                    }
+                    yield _diag(
+                        {
+                            "event": "handoff_update",
+                            "id": f"handoff_update:{ticket}:{current_status or 'none'}",
+                            "data": json.dumps(
+                                {"status": current_status or "none", "ticket_id": ticket}
+                            ),
+                        }
+                    )
                 # sla_breached + handoff_expired come from the live handoffs row — the scheduler
                 # updates priority/status there, so a single DB probe tells us when to fire.
                 open_row = await repo.get_latest_handoff_for_conversation(
@@ -242,6 +258,11 @@ async def conversation_events(
                             "id": f"handoff_expired:{ticket_id}",
                             "data": json.dumps({"ticket_id": ticket_id}),
                         }
+        except BaseException as exc:
+            get_logger().info(  # DIAG-SSE (temporário): canal encerrado por erro/cancelamento
+                "diag_sse_end", conversation_id=str(conversation_id), error=type(exc).__name__
+            )
+            raise
         finally:
             await _release_sse_slot(user.id)
 

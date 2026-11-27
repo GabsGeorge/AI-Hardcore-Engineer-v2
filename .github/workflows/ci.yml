@@ -147,6 +147,17 @@ jobs:
           if grep -Ei 'failed to export|exporting span|transient error|otlp' api.log; then
             echo "::error::a api tentou exportar spans sem o profile obs"; exit 1
           fi
+      - name: DIAG-SSE (temporário) linha do tempo do HITL quando o e2e falha
+        if: failure()
+        run: |
+          dc="docker compose -f docker-compose.yml -f docker-compose.test.yml"
+          echo "--- api: canal SSE e rotas do HITL"
+          $dc logs --no-color --timestamps api \
+            | grep -E 'diag_sse|/v1/(chat|conversations|handoffs)' | tail -120 || true
+          echo "--- web (nginx): /v1"
+          $dc logs --no-color --timestamps web | grep -E '/v1/' | tail -80 || true
+          echo "--- playwright error-context"
+          cat apps/web/test-results/*/error-context.md || true
 
   # Nota: a11y (axe-core) já roda dentro do web-e2e pelo spec `01-register-login` —
   # não precisa de job separado.
