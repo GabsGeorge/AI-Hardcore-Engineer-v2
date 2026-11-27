@@ -84,6 +84,7 @@ Redistributable). O `fakeredis` não persiste nada entre execuções.
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests      # pytest
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm lint       # ruff + mypy
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm web-tests  # Vitest
+export E2E_PASSWORD="$(openssl rand -hex 16)"   # senha das contas do E2E, gerada a cada execução
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm web-e2e    # Playwright
 ```
 
