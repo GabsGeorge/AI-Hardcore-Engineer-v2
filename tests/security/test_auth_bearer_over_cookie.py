@@ -9,6 +9,8 @@ pelo CSRF.
 
 from __future__ import annotations
 
+import secrets
+
 import httpx
 import pytest
 from pydantic import SecretStr
@@ -17,6 +19,9 @@ from app.api.auth import create_token
 from app.auth import passwords, repo
 from app.core.config import get_settings
 from app.db.pool import Pool
+
+# Random per run: no literal password in the repository (secret scan of 2026-11-27).
+PASSWORD = f"pw-{secrets.token_urlsafe(18)}"
 
 pytestmark = pytest.mark.req("REQ-SEC-01")
 
@@ -39,10 +44,10 @@ async def test_bearer_header_wins_over_session_cookie(
         role="merchant",
         status="active",
     )
-    await repo.set_password(db_pool, account_cookie.id, passwords.hash_password("segura-demo-123"))
+    await repo.set_password(db_pool, account_cookie.id, passwords.hash_password(PASSWORD))
     login = await client.post(
         "/v1/auth/login",
-        json={"email": "alice@loja.example", "password": "segura-demo-123"},
+        json={"email": "alice@loja.example", "password": PASSWORD},
     )
     assert login.status_code == 200
     # O cliente httpx ja segura o cookie `session` entre requests.

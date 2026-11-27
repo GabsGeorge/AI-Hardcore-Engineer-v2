@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import secrets
 from unittest.mock import patch
 
 import aiosmtplib
 import pytest
 
 from app.ops import mailer
+
+TOKEN = secrets.token_urlsafe(12)  # random per run: no literal token in the repository
 
 
 @pytest.fixture
@@ -30,12 +33,12 @@ async def test_send_verification_renders_pt_template_with_link() -> None:
         sent["port"] = kwargs.get("port")
 
     with patch.object(aiosmtplib, "send", side_effect=_fake_send):
-        result = await mailer.send_verification(to="x@local", token="raw-token-abc", lang="pt")
+        result = await mailer.send_verification(to="x@local", token=TOKEN, lang="pt")
 
     assert result.delivered is True
     assert "Confirme seu e-mail" in str(sent["subject"])
     body = str(sent["body"])
-    assert "/verify?token=raw-token-abc" in body
+    assert f"/verify?token={TOKEN}" in body
     assert "Getnet" in body
     assert sent["port"] == 1025
 

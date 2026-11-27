@@ -8,7 +8,8 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
  * compartilhada pelos outros specs.
  */
 
-const PASSWORD = "e2e-senha-de-teste-123456";
+// Gerada a cada execução (nada literal no repositório): só precisa de ≥ 12 caracteres.
+const PASSWORD = `e2e-${crypto.randomUUID()}`;
 const MERCHANT = "e2e-lojista@getnet.example.com";
 const OPERATOR = "e2e-operador@getnet.example.com";
 

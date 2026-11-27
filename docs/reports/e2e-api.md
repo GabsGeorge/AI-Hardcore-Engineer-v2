@@ -166,11 +166,14 @@ devolve 404.
 
 ## Credenciais de demo (populadas em `.env`)
 
+As senhas vêm do `.env` gerado por `scripts/bootstrap_env.sh`; nenhum valor de documento vale
+como senha.
+
 ```
 ADMIN_SEED_EMAIL=admin@getnet.example.com
-ADMIN_SEED_PASSWORD=GetnetDemo2026!
+ADMIN_SEED_PASSWORD=<gerada pelo scripts/bootstrap_env.sh>
 MERCHANT_SEED_EMAIL=lojista@getnet.example.com
-MERCHANT_SEED_PASSWORD=LojistaDemo2026!
+MERCHANT_SEED_PASSWORD=<gerada pelo scripts/bootstrap_env.sh>
 ```
 
 Para o merchant demo **ter dados de suporte**: `UPDATE merchants SET
