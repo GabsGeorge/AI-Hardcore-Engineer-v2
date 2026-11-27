@@ -629,27 +629,27 @@ default   [ 100% ] 20 VUs  5m00.0s/5m0s
 
      ✓ status is 200
 
-     checks.........................: 100.00% 523 out of 523
-     data_received..................: 781 kB  2.5 kB/s
-     data_sent......................: 236 kB  749 B/s
-     http_req_blocked...............: avg=75.99µs min=3.2µs  med=7.7µs   max=2.44ms   p(90)=22µs    p(95)=34.76µs 
-     http_req_connecting............: avg=10.76µs min=0s     med=0s      max=602.19µs p(90)=0s      p(95)=0s      
-     http_req_duration..............: avg=10.74s  min=5.06s  med=9.3s    max=27.43s   p(90)=17.09s  p(95)=18.4s   
-       { expected_response:true }...: avg=10.74s  min=5.06s  med=9.3s    max=27.43s   p(90)=17.09s  p(95)=18.4s   
-     ✗ { scenario:compound }........: avg=14.38s  min=8.39s  med=14.84s  max=27.43s   p(90)=18.98s  p(95)=20.72s  
-     ✗ { scenario:simple }..........: avg=9.09s   min=5.06s  med=8.16s   max=22.74s   p(90)=13.83s  p(95)=15.69s  
-   ✓ http_req_failed................: 0.00%   0 out of 523
-     http_req_receiving.............: avg=3.11ms  min=84.3µs med=563.3µs max=273.41ms p(90)=5.42ms  p(95)=8.09ms  
-     http_req_sending...............: avg=77.98µs min=10.6µs med=51.7µs  max=940.1µs  p(90)=154.9µs p(95)=227.54µs
-     http_req_tls_handshaking.......: avg=0s      min=0s     med=0s      max=0s       p(90)=0s      p(95)=0s      
-     http_req_waiting...............: avg=10.73s  min=5.06s  med=9.3s    max=27.42s   p(90)=17.09s  p(95)=18.4s   
-     http_reqs......................: 523     1.663073/s
-     iteration_duration.............: avg=11.74s  min=6.06s  med=10.3s   max=28.43s   p(90)=18.09s  p(95)=19.4s   
-     iterations.....................: 523     1.663073/s
+     checks.........................: 100.00% 503 out of 503
+     data_received..................: 740 kB  2.4 kB/s
+     data_sent......................: 227 kB  721 B/s
+     http_req_blocked...............: avg=793.29µs min=3.6µs  med=7.7µs    max=21.43ms  p(90)=21.62µs  p(95)=29.32µs 
+     http_req_connecting............: avg=122.38µs min=0s     med=0s       max=5.02ms   p(90)=0s       p(95)=0s      
+     http_req_duration..............: avg=11.12s   min=5s     med=9.78s    max=26.67s   p(90)=17.36s   p(95)=19.01s  
+       { expected_response:true }...: avg=11.12s   min=5s     med=9.78s    max=26.67s   p(90)=17.36s   p(95)=19.01s  
+     ✗ { scenario:compound }........: avg=14.67s   min=8.91s  med=15.03s   max=26.67s   p(90)=19.92s   p(95)=21.68s  
+     ✗ { scenario:simple }..........: avg=9.39s    min=5s     med=8.49s    max=25.34s   p(90)=14.51s   p(95)=16.52s  
+   ✓ http_req_failed................: 0.00%   0 out of 503
+     http_req_receiving.............: avg=2.75ms   min=82µs   med=528.59µs max=154.09ms p(90)=5.39ms   p(95)=8.5ms   
+     http_req_sending...............: avg=111.7µs  min=12.5µs med=49.79µs  max=3.72ms   p(90)=197.48µs p(95)=294.73µs
+     http_req_tls_handshaking.......: avg=0s       min=0s     med=0s       max=0s       p(90)=0s       p(95)=0s      
+     http_req_waiting...............: avg=11.12s   min=5s     med=9.78s    max=26.67s   p(90)=17.36s   p(95)=19.01s  
+     http_reqs......................: 503     1.600147/s
+     iteration_duration.............: avg=12.12s   min=6s     med=10.78s   max=27.69s   p(90)=18.36s   p(95)=20.02s  
+     iterations.....................: 503     1.600147/s
      vus............................: 1       min=1          max=20
      vus_max........................: 20      min=20         max=20
 
 
 default ✓ [ 100% ] 20 VUs  5m0s
-time="2026-11-27T17:00:05Z" level=error msg="thresholds on metrics 'http_req_duration{scenario:compound}, http_req_duration{scenario:simple}' have been crossed"
+time="2026-11-27T18:22:29Z" level=error msg="thresholds on metrics 'http_req_duration{scenario:compound}, http_req_duration{scenario:simple}' have been crossed"
 

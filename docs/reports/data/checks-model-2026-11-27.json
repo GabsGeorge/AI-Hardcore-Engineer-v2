@@ -463,9 +463,28 @@
       "not_found_block": 9
     },
     "branch_final": {
+      "answered_with_source": 10,
+      "escalated": 0,
+      "not_found_block": 0
+    },
+    "branch_before_evidence_alignment": {
       "answered_with_source": 4,
       "escalated": 2,
       "not_found_block": 4
+    }
+  },
+  "evidence_numbering_fix": {
+    "cause": "the knowledge answer renumbers its citation markers per cited page ([1] = MDR page), but the verifier numbered the passages in search order ([1] = Pix page), so the fee claim was checked against the wrong passage",
+    "fix": "evidence stored in the order of the renumbered sources (evidence_by_source); verifier numbers the evidence per specialist answer",
+    "verifier_probe_after_fix": {
+      "pix_fee": {
+        "honest_accepted": "8/8",
+        "invented_blocked": "15/15"
+      },
+      "no_card_machine": {
+        "honest_accepted": "8/8",
+        "invented_blocked": "6/6"
+      }
     }
   }
 }

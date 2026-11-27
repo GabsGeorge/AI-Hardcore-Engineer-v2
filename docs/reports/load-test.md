@@ -56,26 +56,28 @@ Thresholds de bloqueio (ver `deploy/k6/chat.js`):
   `deploy/grafana/dashboards/operational.json` mostra a mesma distribuição pelo histograma
   `getnet_http_request_duration_seconds`.
 
-## Run de 2026-11-27 (busca em paralelo com a reescrita, consultas do plano)
+## Run de 2026-11-27 (busca em paralelo, consultas do plano, evidência alinhada)
 
-Mesmo cenário (20 VUs × 5 min, `gpt-4o-mini` em todos os papéis, pool de 30). Saída em
-[data/load-2026-11-27.txt](data/load-2026-11-27.txt); tempo médio por etapa sob a mesma carga em
-[data/stages-2026-11-27.json](data/stages-2026-11-27.json) (histogramas
+Mesmo cenário (20 VUs × 5 min, `gpt-4o-mini` em todos os papéis, pool de 30), no código final do
+PR. Saída em [data/load-2026-11-27.txt](data/load-2026-11-27.txt); tempo médio por etapa sob a
+mesma carga em [data/stages-2026-11-27.json](data/stages-2026-11-27.json) (histogramas
 `getnet_graph_node_duration_seconds` e `getnet_llm_call_duration_seconds`).
 
 | Cenário | média | mediana | p90 | p95 | alvo |
 |---|---|---|---|---|---|
-| simples | 9,1 s | 8,2 s | 13,8 s | **15,7 s** | < 8 s ❌ |
-| composto | 14,4 s | 14,8 s | 19,0 s | **20,7 s** | < 15 s ❌ |
-| erros HTTP | | | | **0/523** | < 1 % ✅ |
+| simples | 9,4 s | 8,5 s | 14,5 s | **16,5 s** | < 8 s ❌ |
+| composto | 14,7 s | 15,0 s | 19,9 s | **21,7 s** | < 15 s ❌ |
+| erros HTTP | | | | **0/503** | < 1 % ✅ |
 
-Por etapa (média sob carga): guardrail de entrada 2,4 s, conhecimento 4,3 s (era 5,3 s numa
-medição de etapas anterior, sem publicar), suporte 2,2 s, síntese 0,5 s, guardrail de saída 1,4 s.
-Por chamada ao modelo: supervisor 2,4 s, especialista de conhecimento 2,6 s, síntese 2,6 s,
-classificador de entrada 1,4 s, verificador de saída 1,4 s, reescrita da busca 1,4 s.
+Uma corrida anterior no mesmo dia, antes do alinhamento da evidência do verificador, deu 15,7 s /
+20,7 s em 523 pedidos ([load-2026-11-27-before-evidence-fix.txt](data/load-2026-11-27-before-evidence-fix.txt)):
+a diferença entre as duas é da ordem da variação entre corridas, e a correção não acrescenta
+chamada ao modelo.
 
-O ajuste do prompt de suporte (erro citado que não está nos dados) entrou depois desta corrida;
-é uma regra de texto e não muda o número de chamadas.
+Por etapa (média sob carga): guardrail de entrada 2,6 s, conhecimento 4,4 s (5,3 s numa medição
+de etapas anterior, sem publicar), suporte 2,4 s, síntese 0,6 s, guardrail de saída 1,5 s. Por
+chamada ao modelo: supervisor 2,5 s, especialista de conhecimento 2,6 s, síntese 2,7 s,
+classificador de entrada 1,4 s, verificador de saída 1,5 s, reescrita da busca 1,4 s.
 
 ## Run de 2026-11-26 com pool de 30 conexões (`DB_POOL_MAX_SIZE=30`)
 

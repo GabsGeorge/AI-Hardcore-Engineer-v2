@@ -6,10 +6,10 @@
         "per_run": [
           "20/20",
           "20/20",
-          "19/20"
+          "20/20"
         ],
-        "mean": 0.9833333333333334,
-        "min": 0.95
+        "mean": 1.0,
+        "min": 1.0
       },
       "tools": {
         "per_run": [
@@ -22,12 +22,12 @@
       },
       "has_sources": {
         "per_run": [
-          "3/4",
-          "3/4",
-          "3/4"
+          "4/4",
+          "4/4",
+          "4/4"
         ],
-        "mean": 0.75,
-        "min": 0.75
+        "mean": 1.0,
+        "min": 1.0
       },
       "handoff": {
         "per_run": [
@@ -57,12 +57,8 @@
         "min": 1.0
       }
     },
-    "unstable": [
-      "sc-20-fanout-crediario"
-    ],
-    "always_failing": [
-      "sc-02-knowledge-pix"
-    ]
+    "unstable": [],
+    "always_failing": []
   },
   "runs": [
     [
@@ -86,7 +82,7 @@
         "id": "sc-02-knowledge-pix",
         "result": {
           "route": true,
-          "has_sources": false
+          "has_sources": true
         },
         "route": [
           "input_guardrail",
@@ -376,7 +372,7 @@
         "id": "sc-02-knowledge-pix",
         "result": {
           "route": true,
-          "has_sources": false
+          "has_sources": true
         },
         "route": [
           "input_guardrail",
@@ -666,7 +662,7 @@
         "id": "sc-02-knowledge-pix",
         "result": {
           "route": true,
-          "has_sources": false
+          "has_sources": true
         },
         "route": [
           "input_guardrail",
@@ -907,7 +903,7 @@
       {
         "id": "sc-20-fanout-crediario",
         "result": {
-          "route": false
+          "route": true
         },
         "route": [
           "input_guardrail",
@@ -915,10 +911,8 @@
           "knowledge",
           "support",
           "supervisor",
-          "knowledge",
-          "support",
-          "supervisor",
-          "escalation"
+          "synthesize",
+          "output_guardrail"
         ]
       },
       {

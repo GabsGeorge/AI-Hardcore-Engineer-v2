@@ -17,39 +17,36 @@ docker compose --profile eval run --rm eval python evals/run_eval.py --runs 3
 O ingest hidrata a base com `src/app/rag/sources.yaml` (PT + EN) e a fonte curada. Sem
 `OPENAI_API_KEY` as embeddings não são geradas e os cenários de `knowledge` degradam.
 
-## Run de 2026-11-27 (busca em paralelo, consultas do plano) — atual
+## Run de 2026-11-27 (busca em paralelo, consultas do plano, evidência alinhada) — atual
 
 Saída bruta: [data/golden-set-2026-11-27.json](data/golden-set-2026-11-27.json),
 [data/golden-set-2026-11-27.log](data/golden-set-2026-11-27.log),
 [data/judge-batch-2026-11-27.json](data/judge-batch-2026-11-27.json) e
 [data/guard-rates-2026-11-27.json](data/guard-rates-2026-11-27.json). `gpt-4o-mini` em todos os
-papéis.
+papéis, no código final do PR.
 
 | Métrica | Por passagem | Média | 2026-11-26 v2 |
 |---|---|---|---|
-| Rota exata | 20/20, 20/20, 19/20 | **98,3%** (gate 95%: **PASS**) | 98,3% |
+| Rota exata | 20/20 ×3 | **100%** (gate 95%: **PASS**) | 98,3% |
 | Tools | 5/5 ×3 | 100% | 100% |
-| Fontes (`has_sources`) | 3/4 ×3 | **75%** | 91,7% |
+| Fontes (`has_sources`) | 4/4 ×3 | **100%** | 91,7% |
 | Handoff, guardrails, PII | 3/3, 2/2, 1/1 ×3 | 100% | 100% |
-| Juiz: fidelidade (conhecimento / suporte) | | 0,9 / 1,0 | 0,9 / 1,0 |
-| Juiz: relevância (conhecimento / suporte) | | 0,7 / 1,0 | 0,7 / 1,0 |
+| Juiz: fidelidade (conhecimento / suporte) | | **1,0 / 1,0** | 0,9 / 1,0 |
+| Juiz: relevância (conhecimento / suporte) | | 0,8 / 1,0 | 0,7 / 1,0 |
 | Guardrail de entrada pela API | | 38/38 ataques, 0/34 legítimas | igual |
 
-- **Fontes 75%**: é o `sc-02-knowledge-pix` nas 3 passagens, trocado pelo verificador de saída
-  ("a resposta não traz números"; `limitations.md` §14). O número de ontem (2 de 3) não se
-  repetiu hoje nem na main: a mesma pergunta 10 vezes pela API, no mesmo dia, deu resposta com
-  fonte 0/10 na main e 4/10 neste build
-  ([checks-model-2026-11-27.json](data/checks-model-2026-11-27.json), `pix_fee_question_x10`).
-  Três passagens são pouco para separar as duas; o teste de 10 é a comparação direta.
-- **sc-20** (composto com crediário) escalou uma vez em 3: a confiança do especialista ficou
-  abaixo do limiar de replanejamento duas vezes. Já oscilava antes (§8).
-- **sc-04** (erro E12 que não aparece nos dados): antes do ajuste do prompt de suporte, o juiz
-  deu fidelidade 0 em 2 de 3 rodadas, porque a resposta falava do NO_SIGNAL e não dizia que o E12
-  não estava nos dados
+- **sc-02 (taxa do Pix)** passou nas 3 passagens. A causa das trocas era a numeração: o
+  especialista renumera as citações por página ([1] = página de MDR) e o verificador numerava as
+  passagens na ordem da busca ([1] = página do Pix), então conferia a afirmação contra a passagem
+  errada. Com a evidência na ordem das citações, a mesma pergunta 10 vezes pela API deu resposta
+  com fonte 10/10 (a main, no mesmo dia: 0/10), e o verificador continuou barrando 15/15 respostas
+  inventadas ([checks-model-2026-11-27.json](data/checks-model-2026-11-27.json)).
+- **sc-04 (erro E12 que não aparece nos dados)**: antes do ajuste do prompt de suporte, o juiz deu
+  fidelidade 0 em 2 de 3 rodadas, porque a resposta falava do NO_SIGNAL sem dizer que o E12 não
+  estava nos dados
   ([before-sc04-fix-r1](data/judge-batch-2026-11-27-before-sc04-fix-r1.json),
   [r2](data/judge-batch-2026-11-27-before-sc04-fix-r2.json),
-  [r3](data/judge-batch-2026-11-27-before-sc04-fix-r3.json)). Com a regra nova, 1,0 nas 3
-  perguntas de verificação e no run acima.
+  [r3](data/judge-batch-2026-11-27-before-sc04-fix-r3.json)). Com a regra nova, 1,0.
 
 ## Run de 2026-11-26, segunda rodada (respostas de taxa corrigidas)
 

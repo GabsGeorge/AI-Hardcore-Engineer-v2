@@ -211,6 +211,23 @@ def renumber_citations(
     return text, [by_url[url] for url in order]
 
 
+def evidence_by_source(
+    items: list[tuple[str, str]], item_sources: list[Source], sources: list[Source]
+) -> list[str]:
+    """The passages, grouped per page in the order of the renumbered ``sources``, so evidence
+    entry ``n`` is the page the answer cites as ``[n]``; pages no marker cites come after.
+
+    The output verifier numbers the evidence. In passage order, "taxa por transação [1]" (the MDR
+    page, renumbered to [1]) was checked against passage [1], the Pix page, and correct Pix fee
+    answers were replaced by "não encontrei base suficiente" (golden sc-02)."""
+    by_url: dict[str, list[str]] = {}
+    for (header, text), source in zip(items, item_sources, strict=True):
+        by_url.setdefault(source["url"], []).append(f"{header}\n{text}")
+    ordered = [by_url.pop(s["url"]) for s in sources if s["url"] in by_url]
+    ordered += list(by_url.values())
+    return ["\n\n".join(passages) for passages in ordered]
+
+
 async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict[str, Any]:
     subtask = state["subtask"]
     question = subtask["query"]
@@ -329,7 +346,7 @@ async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict
             kb_answer,
             min(reply.confidence, relevant[0].score),
             kb_sources,
-            evidence=[f"{header}\n{text}" for header, text in items],
+            evidence=evidence_by_source(items, kb_items, kb_sources),
         )
 
     if not rewrite.general:
@@ -370,5 +387,5 @@ async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict
         web_answer,
         reply.confidence,
         web_sources,
-        evidence=[f"{header}\n{text}" for header, text in items],
+        evidence=evidence_by_source(items, web_items, web_sources),
     )

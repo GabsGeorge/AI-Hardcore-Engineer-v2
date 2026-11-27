@@ -101,7 +101,7 @@ falta o teste que o prove. O E2E de privacidade (T080) foi feito em 2026-11-26, 
 independente mostrou que a tela era um placeholder; a listagem de sessões (T039) ganhou teste de
 integração para o lojista vinculado (QA-060), mas a task continua parcial.
 
-## 8. Golden set: acima do gate, com um cenário instável
+## 8. Golden set: o cenário do Pix (estável desde 2026-11-27)
 
 - **Onde**: [docs/reports/eval.md](reports/eval.md) (segunda rodada de 2026-11-26, saída bruta em
   `docs/reports/data/golden-set-2026-11-26-v2.*`).
@@ -112,10 +112,9 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   trazem número. A resposta certa é relatar as duas fontes e dizer onde o lojista vê o valor do
   plano; ela sai na maioria das vezes, mas numa passagem o verificador de saída ainda trocou a
   resposta e noutra a especialista ficou abaixo de 0,70 e o turno escalou.
-- **2026-11-27** ([eval.md](reports/eval.md), saída em `golden-set-2026-11-27.*`): rota 98,3%
-  (gate passa), mas `sc-02` sem fonte nas 3 passagens (fontes 75%) e `sc-20` escalou em 1. Na
-  mesma data, a pergunta do Pix 10 vezes pela API teve resposta com fonte 0/10 na main e 4/10
-  neste build (§14): a variação de um dia para o outro é maior que a diferença entre builds.
+- **2026-11-27** ([eval.md](reports/eval.md), saída em `golden-set-2026-11-27.*`): rota
+  **100%**, fontes **100%**, nenhum cenário instável. O `sc-02` voltou a passar nas 3 passagens
+  depois que a evidência do verificador passou a seguir a numeração das citações (§14).
 - **Juiz em lote**: relevância 0,70 no conhecimento, com `sc-13`, `sc-17` e `sc-20` em 0 (ver
   eval.md); não investigado nesta rodada.
 - **Não feito de propósito**: baixar `CONFIDENCE_REPLAN`/`CONFIDENCE_ESCALATE_HARD` ou mudar o
@@ -172,7 +171,7 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   | Rodada 3 do QA | 28,3 s | 27,3 s | | 75 | 0 |
   | 2026-11-26, plano em paralelo | 25,4 s | 30,6 s | 16,1 s | 332 | 0 |
   | 2026-11-26, + pool de 30 conexões | 17,8 s | 28,0 s | 10,5 s | 459 | 0 |
-  | **2026-11-27, busca em paralelo + consultas do plano** | **15,7 s** | **20,7 s** | **9,1 s** | **523** | 0 |
+  | **2026-11-27, busca em paralelo + consultas do plano** | **16,5 s** | **21,7 s** | **9,4 s** | **503** | 0 |
 
   Saídas em [reports/data/load-2026-11-26.txt](reports/data/load-2026-11-26.txt),
   [load-2026-11-26-pool30.txt](reports/data/load-2026-11-26-pool30.txt) e
@@ -191,8 +190,9 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   de conhecimento pula a reescrita (uma chamada ao modelo a menos), exceto em pergunta de taxa:
   ali o plano nunca pedia a página de MDR e a resposta do Pix dizia que não há custo por
   transação, então pergunta de taxa continua com a reescrita dedicada; (5) histogramas de tempo
-  por etapa e por chamada ao modelo no Prometheus. Resultado: p95 17,8 s → 15,7 s (simples) e
-  28,0 s → 20,7 s (composto), vazão +14%.
+  por etapa e por chamada ao modelo no Prometheus. Resultado: p95 17,8 s → 16,5 s (simples) e
+  28,0 s → 21,7 s (composto), vazão +10% (uma corrida anterior no mesmo dia deu 15,7 s /
+  20,7 s).
 - **Medido e descartado em 2026-11-27 — modelo menor nas checagens**
   ([checks-model-2026-11-27.json](reports/data/checks-model-2026-11-27.json)): `gpt-5.4-nano`,
   `gpt-4.1-mini` e `gpt-4.1-nano` empataram com o `gpt-4o-mini` em ataques e frases legítimas,
@@ -200,7 +200,7 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   verificador de saída aceitou mais respostas honestas (8/8 contra 4/8), mas deixou passar 3/3
   "o Pix PJ é totalmente gratuito", que contradiz a fonte de MDR. `OPENAI_MODEL_CHECKS` fica vazio;
   a opção (inclusive por papel, `OPENAI_MODEL_CHECKS_ROLES`) existe para medir outro candidato.
-- **O que ainda falta**: sob carga cada chamada ao modelo fica mais lenta (1,4 a 2,6 s cada), e
+- **O que ainda falta**: sob carga cada chamada ao modelo fica mais lenta (1,4 a 2,7 s cada), e
   o turno ainda tem 4 a 5 em sequência; o p95 segue acima da meta. O próximo passo de maior
   efeito para o lojista é a resposta aparecer enquanto é gerada (o endpoint `/v1/chat/stream` já
   existe), mas o texto só pode ser mostrado depois do verificador de saída; mostrar antes exige
@@ -226,7 +226,7 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
 - **Também**: todas as contas web de operador/admin agem como o primeiro `users.id` seed do papel
   (`_seed_user_for_role`), então a auditoria e o rate limit não distinguem dois operadores.
 
-## 14. Guardrail de saída ainda troca parte das respostas
+## 14. Guardrail de saída: falsos positivos do verificador
 
 - **Onde**: `src/app/guardrails/output.py` (papel `output_guard`, `prompts/grounding.md`).
 - **O que**: na revalidação do QA (2026-11-26, 38 turnos com o modelo real) 7 respostas foram
@@ -240,15 +240,21 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   `prompts/grounding.md` ("número ausente não é afirmação sem base"): com a mesma evidência, a
   resposta honesta sobre a taxa do Pix passou 4/4 e a que inventa "0,99%" foi bloqueada 4/4. No
   golden ainda trocou a resposta do sc-02 em 1 de 3 passagens.
-- **2026-11-27, pergunta do Pix 10 vezes pela API** (mesmo modelo, mesmo dia;
-  [checks-model-2026-11-27.json](reports/data/checks-model-2026-11-27.json)): a main respondeu
-  com fonte 0/10 (6 "não encontrei base", 4 encaminhadas ao atendente); com a busca de taxa
-  sempre pela reescrita, 4/10 com fonte (4 trocadas, 2 encaminhadas). Os bloqueios que sobram
-  são o verificador dizendo que a resposta "não traz números", que a regra 10 manda não punir.
-  Trocar o verificador para `gpt-4.1-mini` resolveria isso (8/8 honestas aceitas), mas ele deixou
-  passar 3/3 uma resposta que contradiz a fonte, então não foi adotado (§11). Uma regra extra
-  no prompt de grounding ("nenhum registro" sustenta "não há") foi testada e retirada: piorou as
-  respostas honestas de taxa (5/8 contra 8/8) sem ajudar o caso que motivou.
+- **2026-11-27, causa encontrada e corrigida**: o especialista renumera as citações por página
+  citada ("taxa por transação [1]", com [1] = página de MDR), mas o verificador numerava as
+  passagens na ordem da busca ([1] = página do Pix, que não fala de taxa). Ele conferia a
+  afirmação contra a passagem errada e trocava respostas corretas. Agora a evidência é gravada na
+  ordem das citações (`evidence_by_source`) e numerada por especialista
+  (`tests/unit/test_evidence_numbering.py`). A mesma pergunta do Pix 10 vezes pela API: main 0/10
+  com fonte, este build **10/10**; o verificador aceitou 8/8 respostas honestas e continuou
+  barrando 15/15 inventadas (inclusive "o Pix PJ é gratuito")
+  ([checks-model-2026-11-27.json](reports/data/checks-model-2026-11-27.json)). O mesmo
+  desalinhamento afetava respostas compostas, em que conhecimento e suporte numeram cada um a
+  partir de [1].
+- **O que sobra**: o verificador ainda é o `gpt-4o-mini` e pode errar em outros casos (o do
+  WhatsApp acima). Trocar por `gpt-4.1-mini` foi medido e recusado: deixou passar uma resposta
+  que contradiz a fonte (§11). Uma regra extra no prompt ("nenhum registro" sustenta "não há")
+  também foi testada e retirada: piorava as respostas honestas sem ajudar o caso que a motivou.
 - **Evolução**: verificador com modelo maior, ou checagem por afirmação (quebrar a resposta em
   frases e checar cada uma contra a passagem citada), medindo acertos e falsos positivos juntos.
 - **Evidência**: [reports/qa-e2e-resposta.md](reports/qa-e2e-resposta.md).

@@ -103,20 +103,28 @@ def _language(state: AgentState) -> str:
 
 
 def _sources_block(results: list[Any]) -> str:
-    """Passages the answer model actually saw (``evidence``), numbered like its context. The
-    grounding model needs the real text to judge each claim; title + url alone forces it to
-    guess, which blocked correct answers and let unsupported ones through. Falls back to the
-    bare source list only when a result carries no evidence."""
-    lines: list[str] = []
+    """Passages the answer model actually saw (``evidence``), with their text. The grounding
+    model needs the real text to judge each claim; title + url alone forces it to guess, which
+    blocked correct answers and let unsupported ones through. Falls back to the bare source list
+    only when a result carries no evidence.
+
+    Each specialist answer numbers its own citations from [1], so the evidence is numbered per
+    answer under a header naming it, and a knowledge result's entry [n] is the page its answer
+    cites as [n] (``evidence_by_source``). With one running count in passage order, a marker
+    pointed at another passage and the verifier rejected supported claims (golden sc-02)."""
+    blocks: list[str] = []
     for r in results:
-        evidence = r.get("evidence") or []
-        if evidence:
-            lines.extend(f"[{len(lines) + 1}] {text}" for text in evidence)
+        entries = list(r.get("evidence") or [])
+        if not entries:
+            entries = [
+                f"({s.get('kind', 'kb')}) {s.get('title', '')} — {s.get('url', '')}"
+                for s in r.get("sources") or []
+            ]
+        if not entries:
             continue
-        for s in r.get("sources") or []:
-            kind, title, url = s.get("kind", "kb"), s.get("title", ""), s.get("url", "")
-            lines.append(f"[{len(lines) + 1}] ({kind}) {title} — {url}")
-    return "\n\n".join(lines)
+        numbered = "\n\n".join(f"[{n}] {text}" for n, text in enumerate(entries, 1))
+        blocks.append(f"Sources of the {r.get('agent', 'specialist')} answer:\n{numbered}")
+    return "\n\n".join(blocks)
 
 
 def _last_question(messages: list[Any]) -> str:

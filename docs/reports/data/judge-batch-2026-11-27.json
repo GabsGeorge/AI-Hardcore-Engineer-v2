@@ -7,11 +7,11 @@
     "support->support": 4
   },
   "faithfulness_mean_by_bucket": {
-    "knowledge": 0.9,
+    "knowledge": 1.0,
     "support": 1.0
   },
   "relevance_mean_by_bucket": {
-    "knowledge": 0.7,
+    "knowledge": 0.8,
     "support": 1.0
   },
   "totals": {
@@ -27,7 +27,7 @@
     {
       "id": "sc-02-knowledge-pix",
       "faithfulness": 1.0,
-      "relevance": 0.0
+      "relevance": 1.0
     },
     {
       "id": "sc-03-support-settlement",
@@ -61,7 +61,7 @@
     },
     {
       "id": "sc-13-en-fanout",
-      "faithfulness": 0.0,
+      "faithfulness": 1.0,
       "relevance": 0.0
     },
     {
