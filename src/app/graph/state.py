@@ -32,6 +32,7 @@ class SubTask(TypedDict):
     id: str
     agent: AgentName
     query: str
+    search_queries: NotRequired[list[dict[str, str]]]
 
 
 class AgentResult(TypedDict):
@@ -81,10 +82,19 @@ class SpecialistInput(TypedDict):
     language: str
 
 
+class SearchQueryModel(BaseModel):
+    query: str = Field(min_length=1, max_length=300)
+    lang: Literal["pt", "en"]
+
+
 class SubTaskModel(BaseModel):
     id: str = Field(min_length=1, max_length=20)
     agent: AgentName
     query: str = Field(min_length=1, max_length=1000)
+    # Knowledge subtasks only: keyword queries for the knowledge base, written by the planner in
+    # the same call, so the specialist skips its own rewrite call (latency, docs/limitations.md
+    # §11). Empty → the specialist rewrites the query itself, as before.
+    search_queries: list[SearchQueryModel] = Field(default_factory=list, max_length=3)
 
 
 class PlanModel(BaseModel):

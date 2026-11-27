@@ -3,9 +3,8 @@
 Scenario-level eval contra a API rodando, com `OPENAI_API_KEY` real e `evals/golden_set.yaml`
 como gabarito. Executado por `evals/run_eval.py` (profile `eval` do compose).
 
-> **2026-11-26 (noite)**: o golden set foi rodado de novo com os prompts atuais (3 passagens, rota
-> exata) e o juiz em lote rodou pela primeira vez. Resultados na seção "Run de 2026-11-26" abaixo;
-> as seções seguintes ficam como histórico.
+> **2026-11-27**: rodada com a busca em paralelo e as consultas do plano; resultados na seção
+> "Run de 2026-11-27" abaixo. As seções seguintes ficam como histórico.
 
 ## Rodar
 
@@ -18,7 +17,41 @@ docker compose --profile eval run --rm eval python evals/run_eval.py --runs 3
 O ingest hidrata a base com `src/app/rag/sources.yaml` (PT + EN) e a fonte curada. Sem
 `OPENAI_API_KEY` as embeddings não são geradas e os cenários de `knowledge` degradam.
 
-## Run de 2026-11-26, segunda rodada (respostas de taxa corrigidas) — atual
+## Run de 2026-11-27 (busca em paralelo, consultas do plano) — atual
+
+Saída bruta: [data/golden-set-2026-11-27.json](data/golden-set-2026-11-27.json),
+[data/golden-set-2026-11-27.log](data/golden-set-2026-11-27.log),
+[data/judge-batch-2026-11-27.json](data/judge-batch-2026-11-27.json) e
+[data/guard-rates-2026-11-27.json](data/guard-rates-2026-11-27.json). `gpt-4o-mini` em todos os
+papéis.
+
+| Métrica | Por passagem | Média | 2026-11-26 v2 |
+|---|---|---|---|
+| Rota exata | 20/20, 20/20, 19/20 | **98,3%** (gate 95%: **PASS**) | 98,3% |
+| Tools | 5/5 ×3 | 100% | 100% |
+| Fontes (`has_sources`) | 3/4 ×3 | **75%** | 91,7% |
+| Handoff, guardrails, PII | 3/3, 2/2, 1/1 ×3 | 100% | 100% |
+| Juiz: fidelidade (conhecimento / suporte) | | 0,9 / 1,0 | 0,9 / 1,0 |
+| Juiz: relevância (conhecimento / suporte) | | 0,7 / 1,0 | 0,7 / 1,0 |
+| Guardrail de entrada pela API | | 38/38 ataques, 0/34 legítimas | igual |
+
+- **Fontes 75%**: é o `sc-02-knowledge-pix` nas 3 passagens, trocado pelo verificador de saída
+  ("a resposta não traz números"; `limitations.md` §14). O número de ontem (2 de 3) não se
+  repetiu hoje nem na main: a mesma pergunta 10 vezes pela API, no mesmo dia, deu resposta com
+  fonte 0/10 na main e 4/10 neste build
+  ([checks-model-2026-11-27.json](data/checks-model-2026-11-27.json), `pix_fee_question_x10`).
+  Três passagens são pouco para separar as duas; o teste de 10 é a comparação direta.
+- **sc-20** (composto com crediário) escalou uma vez em 3: a confiança do especialista ficou
+  abaixo do limiar de replanejamento duas vezes. Já oscilava antes (§8).
+- **sc-04** (erro E12 que não aparece nos dados): antes do ajuste do prompt de suporte, o juiz
+  deu fidelidade 0 em 2 de 3 rodadas, porque a resposta falava do NO_SIGNAL e não dizia que o E12
+  não estava nos dados
+  ([before-sc04-fix-r1](data/judge-batch-2026-11-27-before-sc04-fix-r1.json),
+  [r2](data/judge-batch-2026-11-27-before-sc04-fix-r2.json),
+  [r3](data/judge-batch-2026-11-27-before-sc04-fix-r3.json)). Com a regra nova, 1,0 nas 3
+  perguntas de verificação e no run acima.
+
+## Run de 2026-11-26, segunda rodada (respostas de taxa corrigidas)
 
 Saída bruta: [data/golden-set-2026-11-26-v2.json](data/golden-set-2026-11-26-v2.json),
 [data/golden-set-2026-11-26-v2.log](data/golden-set-2026-11-26-v2.log) e

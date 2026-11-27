@@ -250,6 +250,11 @@ anterior). Amostra pequena: veja as ressalvas no ADR.
 
 Todos os papéis usam `OPENAI_MODEL_PRIMARY` (`gpt-4o-mini` no `.env.example`), com
 `OPENAI_MODEL_FALLBACK` encadeado quando definido; embeddings com `text-embedding-3-small`.
+`OPENAI_MODEL_CHECKS` (vazio por padrão) troca o modelo das checagens curtas (classificador de
+entrada, verificador de saída, reescrita da busca), todas ou só as de `OPENAI_MODEL_CHECKS_ROLES`.
+Os candidatos medidos em 2026-11-27 não foram adotados: nenhum era mais rápido de forma relevante,
+e o `gpt-4.1-mini` como verificador deixou passar uma resposta que contradiz a fonte
+([docs/limitations.md](docs/limitations.md) §11).
 
 | Papel | Onde | Saída |
 |---|---|---|
@@ -363,8 +368,10 @@ Thresholds de bloqueio: p95 simples < 8 s, composto < 15 s, erros < 1 %. Na roda
 independente (2026-11-26, 20 usuários × 5 min, `gpt-4o-mini`) o p95 ficou em 17,7 s (simples) e
 18,4 s (composto); na carga da rodada 3 do mesmo QA, 28,3 s e 27,3 s, sem erros (0/75); e em
 2026-11-26, com o plano em paralelo e o pool de 30 conexões, 17,8 s e 28,0 s, 0 erros em 459
-pedidos (25,4 s e 30,6 s só com o plano em paralelo). Acima da
-meta nas duas: ver [docs/limitations.md](docs/limitations.md) §11.
+pedidos (25,4 s e 30,6 s só com o plano em paralelo). Em **2026-11-27**, com a busca em paralelo
+com a reescrita e as consultas do plano no lugar da reescrita, **15,7 s e 20,7 s**, 0 erros em 523
+pedidos ([load-2026-11-27.txt](docs/reports/data/load-2026-11-27.txt)). Acima da meta nas
+duas: ver [docs/limitations.md](docs/limitations.md) §11.
 
 ---
 
@@ -405,7 +412,7 @@ jornada por perfil em [apps/web/PRODUCT.md](apps/web/PRODUCT.md).
   idempotência, fallback de modelo, expurgo/LGPD, streaming SSE, UI web (lojista, operador, admin),
   tracing com Tempo, métricas e dashboards no Grafana, avaliação online, k6, CI com gates
   (lint, tipos, testes, E2E, gitleaks, Trivy).
-- **O que não está entregue ou não atinge a meta**: p95 sob carga acima do SLO (17,8 s / 28,0 s),
+- **O que não está entregue ou não atinge a meta**: p95 sob carga acima do SLO (15,7 s / 20,7 s),
   recall@5 de 0,702 no conjunto de calibração (holdout: 0,967), a pergunta de taxa do Pix PJ
   ainda instável no golden set e testes planejados que não existem — lista completa em
   [docs/limitations.md](docs/limitations.md).
@@ -593,9 +600,9 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
   do turno anterior e sem "meu" ainda pode ser barrado. Libera a pergunta se o LLM falhar
   (fail-open, compensado pela identidade só no token e pelo guardrail de saída).
 - Circuit breaker por processo; alguns testes planejados não existem.
-- Latência com o modelo real acima do SLO: com 20 usuários, p95 de 17,8 s (simples) e 28,0 s
-  (composto) e média de 10,5 s em 2026-11-26, depois do plano em paralelo e do pool de 30
-  conexões (antes: 25,4 s / 30,6 s, média 16,1 s).
+- Latência com o modelo real acima do SLO: com 20 usuários, p95 de 15,7 s (simples) e 20,7 s
+  (composto) e média de 9,1 s em 2026-11-27 (antes: 17,8 s / 28,0 s, média 10,5 s; e 25,4 s /
+  30,6 s, média 16,1 s, sem o pool de 30 conexões).
 - Respostas do QA independente (2026-11-26), achado por achado:
   [docs/reports/qa-e2e-resposta.md](docs/reports/qa-e2e-resposta.md).
 

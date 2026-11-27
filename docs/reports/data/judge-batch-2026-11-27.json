@@ -1,0 +1,93 @@
+{
+  "confusion_matrix": {
+    "escalation->escalation": 3,
+    "knowledge->knowledge": 10,
+    "other->escalation": 1,
+    "safe_response->safe_response": 3,
+    "support->support": 4
+  },
+  "faithfulness_mean_by_bucket": {
+    "knowledge": 0.9,
+    "support": 1.0
+  },
+  "relevance_mean_by_bucket": {
+    "knowledge": 0.7,
+    "support": 1.0
+  },
+  "totals": {
+    "requests": 21,
+    "judged": 14
+  },
+  "per_scenario": [
+    {
+      "id": "sc-01-knowledge-antecipacao",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-02-knowledge-pix",
+      "faithfulness": 1.0,
+      "relevance": 0.0
+    },
+    {
+      "id": "sc-03-support-settlement",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-04-support-terminal",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-05-fanout",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-06-knowledge-link",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-11-en-knowledge",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-12-en-support",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-13-en-fanout",
+      "faithfulness": 0.0,
+      "relevance": 0.0
+    },
+    {
+      "id": "sc-17-followup",
+      "faithfulness": 1.0,
+      "relevance": 0.0
+    },
+    {
+      "id": "sc-18-support-decline",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-19-knowledge-crediario",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-20-fanout-crediario",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    },
+    {
+      "id": "sc-21-en-crediario",
+      "faithfulness": 1.0,
+      "relevance": 1.0
+    }
+  ]
+}

@@ -112,6 +112,10 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   trazem número. A resposta certa é relatar as duas fontes e dizer onde o lojista vê o valor do
   plano; ela sai na maioria das vezes, mas numa passagem o verificador de saída ainda trocou a
   resposta e noutra a especialista ficou abaixo de 0,70 e o turno escalou.
+- **2026-11-27** ([eval.md](reports/eval.md), saída em `golden-set-2026-11-27.*`): rota 98,3%
+  (gate passa), mas `sc-02` sem fonte nas 3 passagens (fontes 75%) e `sc-20` escalou em 1. Na
+  mesma data, a pergunta do Pix 10 vezes pela API teve resposta com fonte 0/10 na main e 4/10
+  neste build (§14): a variação de um dia para o outro é maior que a diferença entre builds.
 - **Juiz em lote**: relevância 0,70 no conhecimento, com `sc-13`, `sc-17` e `sc-20` em 0 (ver
   eval.md); não investigado nesta rodada.
 - **Não feito de propósito**: baixar `CONFIDENCE_REPLAN`/`CONFIDENCE_ESCALATE_HARD` ou mudar o
@@ -167,10 +171,13 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   | QA independente | 17,7 s | 18,4 s | | | |
   | Rodada 3 do QA | 28,3 s | 27,3 s | | 75 | 0 |
   | 2026-11-26, plano em paralelo | 25,4 s | 30,6 s | 16,1 s | 332 | 0 |
-  | **2026-11-26, + pool de 30 conexões** | **17,8 s** | **28,0 s** | **10,5 s** | **459** | 0 |
+  | 2026-11-26, + pool de 30 conexões | 17,8 s | 28,0 s | 10,5 s | 459 | 0 |
+  | **2026-11-27, busca em paralelo + consultas do plano** | **15,7 s** | **20,7 s** | **9,1 s** | **523** | 0 |
 
-  Saídas em [reports/data/load-2026-11-26.txt](reports/data/load-2026-11-26.txt) e
-  [load-2026-11-26-pool30.txt](reports/data/load-2026-11-26-pool30.txt).
+  Saídas em [reports/data/load-2026-11-26.txt](reports/data/load-2026-11-26.txt),
+  [load-2026-11-26-pool30.txt](reports/data/load-2026-11-26-pool30.txt) e
+  [load-2026-11-27.txt](reports/data/load-2026-11-27.txt); tempo por etapa em
+  [stages-2026-11-27.json](reports/data/stages-2026-11-27.json).
 - **O que foi feito**: (1) o plano do supervisor roda em paralelo com o classificador de entrada
   (sem carga: média 7,7 s → 7,2 s); (2) o pool de conexões da api com o Postgres passou de 10
   para 30 (`DB_POOL_MAX_SIZE`): cada passo do grafo grava um checkpoint, e com 20 turnos ao mesmo
@@ -179,10 +186,25 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   em 2% (não era CPU nem banco); 3 workers uvicorn com o pool novo não melhoraram o p95 (20,4 s /
   27,7 s numa corrida de 90 s, contra 18,4 s / 22,1 s com um processo) e exigiriam métricas
   Prometheus multiprocesso; a OpenAI recusou 3 de 332 pedidos (não é limite da chave).
-- **O que ainda falta**: sob carga cada chamada ao modelo fica mais lenta, e o turno tem até 6
-  em sequência; a cauda (p95) do composto segue em 28 s. Próximos passos: modelo menor para os
-  classificadores, reescrita da busca em paralelo com a primeira busca, e resposta por streaming
-  na tela (o endpoint `/v1/chat/stream` já existe) para o lojista ver o texto antes do fim.
+- **Feito em 2026-11-27**: (3) a busca com a pergunta como foi escrita roda em paralelo com a
+  reescrita da busca; (4) o plano do supervisor já traz as consultas de busca, e o especialista
+  de conhecimento pula a reescrita (uma chamada ao modelo a menos), exceto em pergunta de taxa:
+  ali o plano nunca pedia a página de MDR e a resposta do Pix dizia que não há custo por
+  transação, então pergunta de taxa continua com a reescrita dedicada; (5) histogramas de tempo
+  por etapa e por chamada ao modelo no Prometheus. Resultado: p95 17,8 s → 15,7 s (simples) e
+  28,0 s → 20,7 s (composto), vazão +14%.
+- **Medido e descartado em 2026-11-27 — modelo menor nas checagens**
+  ([checks-model-2026-11-27.json](reports/data/checks-model-2026-11-27.json)): `gpt-5.4-nano`,
+  `gpt-4.1-mini` e `gpt-4.1-nano` empataram com o `gpt-4o-mini` em ataques e frases legítimas,
+  mas nenhum foi mais rápido de forma relevante (±0,2 s por chamada). O `gpt-4.1-mini` como
+  verificador de saída aceitou mais respostas honestas (8/8 contra 4/8), mas deixou passar 3/3
+  "o Pix PJ é totalmente gratuito", que contradiz a fonte de MDR. `OPENAI_MODEL_CHECKS` fica vazio;
+  a opção (inclusive por papel, `OPENAI_MODEL_CHECKS_ROLES`) existe para medir outro candidato.
+- **O que ainda falta**: sob carga cada chamada ao modelo fica mais lenta (1,4 a 2,6 s cada), e
+  o turno ainda tem 4 a 5 em sequência; o p95 segue acima da meta. O próximo passo de maior
+  efeito para o lojista é a resposta aparecer enquanto é gerada (o endpoint `/v1/chat/stream` já
+  existe), mas o texto só pode ser mostrado depois do verificador de saída; mostrar antes exige
+  decidir como tratar uma resposta que o verificador troca depois de exibida.
 
 ## 12. `X-Real-IP` confiável só atrás do nginx
 
@@ -218,6 +240,15 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   `prompts/grounding.md` ("número ausente não é afirmação sem base"): com a mesma evidência, a
   resposta honesta sobre a taxa do Pix passou 4/4 e a que inventa "0,99%" foi bloqueada 4/4. No
   golden ainda trocou a resposta do sc-02 em 1 de 3 passagens.
+- **2026-11-27, pergunta do Pix 10 vezes pela API** (mesmo modelo, mesmo dia;
+  [checks-model-2026-11-27.json](reports/data/checks-model-2026-11-27.json)): a main respondeu
+  com fonte 0/10 (6 "não encontrei base", 4 encaminhadas ao atendente); com a busca de taxa
+  sempre pela reescrita, 4/10 com fonte (4 trocadas, 2 encaminhadas). Os bloqueios que sobram
+  são o verificador dizendo que a resposta "não traz números", que a regra 10 manda não punir.
+  Trocar o verificador para `gpt-4.1-mini` resolveria isso (8/8 honestas aceitas), mas ele deixou
+  passar 3/3 uma resposta que contradiz a fonte, então não foi adotado (§11). Uma regra extra
+  no prompt de grounding ("nenhum registro" sustenta "não há") foi testada e retirada: piorou as
+  respostas honestas de taxa (5/8 contra 8/8) sem ajudar o caso que motivou.
 - **Evolução**: verificador com modelo maior, ou checagem por afirmação (quebrar a resposta em
   frases e checar cada uma contra a passagem citada), medindo acertos e falsos positivos juntos.
 - **Evidência**: [reports/qa-e2e-resposta.md](reports/qa-e2e-resposta.md).

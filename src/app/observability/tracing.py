@@ -114,12 +114,17 @@ def traced_node(name: str, fn: Callable[..., Awaitable[Any]]) -> Callable[..., A
 
     # LangGraph only injects `config` into a parameter annotated as RunnableConfig.
     async def node(state: Any, config: RunnableConfig) -> Any:
+        from app.observability.metrics import NODE_LATENCY
+
         with tracer.start_as_current_span(
             name, record_exception=False, set_status_on_exception=False
         ) as current:
             current.set_attribute("graph.node", name)
+            started = time.perf_counter()
             try:
-                return await (fn(state, config) if wants_config else fn(state))
+                result = await (fn(state, config) if wants_config else fn(state))
+                NODE_LATENCY.labels(name).observe(time.perf_counter() - started)
+                return result
             except BaseException as exc:
                 if _is_interrupt(exc):
                     current.set_attribute("graph.interrupted", True)
@@ -174,7 +179,7 @@ class TracedModel:
         return getattr(self._inner, name)
 
     async def ainvoke(self, payload: Any, config: Any = None, **kwargs: Any) -> Any:
-        from app.observability.metrics import TOKENS
+        from app.observability.metrics import LLM_LATENCY, TOKENS
 
         with get_tracer().start_as_current_span(f"llm.{self._role}") as current:
             current.set_attribute("llm.role", self._role)
@@ -190,9 +195,9 @@ class TracedModel:
             try:
                 result = await self._inner.ainvoke(payload, config, **kwargs)
             finally:
-                current.set_attribute(
-                    "llm.latency_ms", round((time.perf_counter() - started) * 1000, 1)
-                )
+                elapsed = time.perf_counter() - started
+                current.set_attribute("llm.latency_ms", round(elapsed * 1000, 1))
+                LLM_LATENCY.labels(self._role).observe(elapsed)
             message, usage = _usage(result)
             input_tokens = int(usage.get("input_tokens", 0))
             output_tokens = int(usage.get("output_tokens", 0))
