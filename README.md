@@ -9,10 +9,10 @@ na própria máquina — não há dependência de Python ou `make` no host.**
 
 > **Status**: spec **001** (multi-agent) com 179 de 180 tasks fechadas e spec **002-web-ui** com
 > 98 de 105; as 8 abertas são testes que faltam, listados em
-> [docs/limitations.md](docs/limitations.md) §7. Testes: **681** no backend (pytest: 375 de
-> unidade, 37 de contrato, 146 de integração, 104 de segurança, 20 de repositório/infra; 680
+> [docs/limitations.md](docs/limitations.md) §7. Testes: **686** no backend (pytest: 379 de
+> unidade, 37 de contrato, 146 de integração, 104 de segurança, 20 de repositório/infra; 685
 > passam e 1 é pulado), **98** no frontend (Vitest) e **19** E2E (Playwright contra a stack real). Golden set com LLM real: rota
-> exata **86,7%** de média em 3 passagens (2026-11-26), abaixo do gate de 95% — causa e números em
+> exata **98,3%** de média em 3 passagens (2026-11-26), acima do gate de 95% — causa e números em
 > [docs/reports/eval.md](docs/reports/eval.md). Quadros em
 > [specs/001-multi-agent-support/tasks.md](specs/001-multi-agent-support/tasks.md) e
 > [specs/002-web-ui/tasks.md](specs/002-web-ui/tasks.md).
@@ -94,7 +94,7 @@ teste consegue chamar a OpenAI ou o site da Getnet por acidente.
 
 | Camada | O que prova | Quantidade | Onde |
 |---|---|---|---|
-| Unidade | regras puras: `decide` do supervisor, máscara de PII, heurísticas do guardrail, chunking, RRF, checagem do eval, canal de eventos | 375 | `tests/unit/` |
+| Unidade | regras puras: `decide` do supervisor, máscara de PII, heurísticas do guardrail, chunking, RRF, checagem do eval, canal de eventos | 379 | `tests/unit/` |
 | Contrato | formato de `/v1/chat` e `/v1/chat/stream`, idempotência, validação, fuzz de payload | 37 | `tests/contract/` |
 | Integração do grafo | grafo, Postgres e Redis reais, com **LLM fake determinístico** | 146 | `tests/integration/` |
 | Segurança | IDOR, CSRF, RBAC, injeção direta/indireta/identidade, PII em logs e spans, limites | 104 | `tests/security/` |
@@ -361,7 +361,8 @@ docker compose --profile load run --rm -e AUTH_TOKENS="${TOKENS}" k6 run /script
 Thresholds de bloqueio: p95 simples < 8 s, composto < 15 s, erros < 1 %. Na rodada do QA
 independente (2026-11-26, 20 usuários × 5 min, `gpt-4o-mini`) o p95 ficou em 17,7 s (simples) e
 18,4 s (composto); na carga da rodada 3 do mesmo QA, 28,3 s e 27,3 s, sem erros (0/75); e em
-2026-11-26, com o plano em paralelo, 25,4 s e 30,6 s, 0 erros em 332 pedidos. Acima da
+2026-11-26, com o plano em paralelo e o pool de 30 conexões, 17,8 s e 28,0 s, 0 erros em 459
+pedidos (25,4 s e 30,6 s só com o plano em paralelo). Acima da
 meta nas duas: ver [docs/limitations.md](docs/limitations.md) §11.
 
 ---
@@ -403,9 +404,10 @@ jornada por perfil em [apps/web/PRODUCT.md](apps/web/PRODUCT.md).
   idempotência, fallback de modelo, expurgo/LGPD, streaming SSE, UI web (lojista, operador, admin),
   tracing com Tempo, métricas e dashboards no Grafana, avaliação online, k6, CI com gates
   (lint, tipos, testes, E2E, gitleaks, Trivy).
-- **O que não está entregue ou não atinge a meta**: golden set abaixo do gate na rota exata
-  (86,7%), recall@5 de 0,702 no conjunto de calibração (holdout: 0,967), testes planejados que não existem e itens
-  recomendados não feitos — lista completa em [docs/limitations.md](docs/limitations.md).
+- **O que não está entregue ou não atinge a meta**: p95 sob carga acima do SLO (17,8 s / 28,0 s),
+  recall@5 de 0,702 no conjunto de calibração (holdout: 0,967), a pergunta de taxa do Pix PJ
+  ainda instável no golden set e testes planejados que não existem — lista completa em
+  [docs/limitations.md](docs/limitations.md).
 
 ---
 
@@ -547,7 +549,7 @@ curl -s http://localhost:8000/v1/chat \
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
-# → 680 passed, 1 skipped (backend). Frontend: run --rm web-tests (98); E2E: run --rm web-e2e (19).
+# → 685 passed, 1 skipped (backend). Frontend: run --rm web-tests (98); E2E: run --rm web-e2e (19).
 ```
 
 ### 8. Usar a UI web
@@ -574,10 +576,9 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
 
 ### 9. Limitações (resumo)
 
-- Golden set com LLM real: rota exata **86,7%** de média, abaixo do gate de 95%; o supervisor
-  roteia certo, mas as perguntas de taxa do Pix (fontes da Getnet conflitantes, sem número)
-  escalam para humano. Juiz em lote (1 passagem): faithfulness 1,00 no suporte e 0,75 no
-  conhecimento.
+- Golden set com LLM real: rota exata **98,3%** de média (gate de 95%: passa); a pergunta de
+  taxa do Pix para PJ (fontes da Getnet conflitantes, sem número) ainda oscila (1 de 3). Juiz em
+  lote: faithfulness 1,00 no suporte e 0,90 no conhecimento, relevância 0,70 no conhecimento.
 - Retrieval: recall@5 de 0,967 num holdout de 30 perguntas pontuais e de 0,702 no conjunto de
   calibração (temas amplos, era 0,798), abaixo da meta de 0,90 nesse último.
 - O classificador de entrada, com o modelo real, bloqueia os 38 ataques e 0 das 34 frases
@@ -585,9 +586,9 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
   do turno anterior e sem "meu" ainda pode ser barrado. Libera a pergunta se o LLM falhar
   (fail-open, compensado pela identidade só no token e pelo guardrail de saída).
 - Circuit breaker por processo; alguns testes planejados não existem.
-- Latência com o modelo real acima do SLO: p95 de 25,4 s (simples) e 30,6 s (composto) com 20
-  usuários em 2026-11-26 (17,7 s a 28,3 s nas rodadas do QA); o plano em paralelo tirou ~0,6 s por
-  turno sem carga, mas não move o p95 sob carga.
+- Latência com o modelo real acima do SLO: com 20 usuários, p95 de 17,8 s (simples) e 28,0 s
+  (composto) e média de 10,5 s em 2026-11-26, depois do plano em paralelo e do pool de 30
+  conexões (antes: 25,4 s / 30,6 s, média 16,1 s).
 - Respostas do QA independente (2026-11-26), achado por achado:
   [docs/reports/qa-e2e-resposta.md](docs/reports/qa-e2e-resposta.md).
 

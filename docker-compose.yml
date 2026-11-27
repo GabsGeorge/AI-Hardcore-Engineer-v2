@@ -71,6 +71,8 @@ services:
       # alem do mem_limit e disparava OOM 137. Com SKIP_RERANKER=1 o retriever
       # usa so BM25+densa (RRF) com score 0.85 no fallback.
       SKIP_RERANKER: "${SKIP_RERANKER:-1}"
+      # Conexões da api com o Postgres (cada passo do grafo grava um checkpoint).
+      DB_POOL_MAX_SIZE: "${DB_POOL_MAX_SIZE:-30}"
       # Vazio por padrão: sem o profile `obs` não há Tempo, então a api não exporta spans (o
       # trace_id continua na resposta). docker-compose.obs.yml liga o export para o Tempo.
       OTEL_EXPORTER_OTLP_ENDPOINT: "${OTEL_EXPORTER_OTLP_ENDPOINT:-}"

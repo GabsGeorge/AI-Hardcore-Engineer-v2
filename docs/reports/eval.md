@@ -18,7 +18,37 @@ docker compose --profile eval run --rm eval python evals/run_eval.py --runs 3
 O ingest hidrata a base com `src/app/rag/sources.yaml` (PT + EN) e a fonte curada. Sem
 `OPENAI_API_KEY` as embeddings não são geradas e os cenários de `knowledge` degradam.
 
-## Run de 2026-11-26 (prompts atuais, 3 passagens)
+## Run de 2026-11-26, segunda rodada (respostas de taxa corrigidas) — atual
+
+Saída bruta: [data/golden-set-2026-11-26-v2.json](data/golden-set-2026-11-26-v2.json),
+[data/golden-set-2026-11-26-v2.log](data/golden-set-2026-11-26-v2.log) e
+[data/judge-batch-2026-11-26-v2.json](data/judge-batch-2026-11-26-v2.json).
+
+| Métrica | Por passagem | Média | Mínimo |
+|---|---|---|---|
+| Rota exata | 20/20, 19/20, 20/20 | **98,3%** | 95% (gate 95%: **PASS**) |
+| Tools | 5/5 ×3 | 100% | 100% |
+| Fontes (`has_sources`) | 3/4, 4/4, 4/4 | 91,7% | 75% |
+| Handoff, guardrails, PII | 3/3, 2/2, 1/1 ×3 | 100% | 100% |
+
+- **Nenhum cenário falha sempre.** `sc-02-knowledge-pix` passa em 1 das 3 passagens: numa, a
+  resposta foi trocada pelo guardrail de saída (rota certa, sem fonte); noutra, a especialista
+  ficou abaixo de 0,70 e o turno escalou.
+- **O que mudou desde a primeira rodada do dia**: (1) a busca com várias reformulações passou a
+  garantir o melhor trecho de cada reformulação (`merge_hits`): antes as páginas de Pix tomavam
+  as 5 vagas e a página de MDR, que diz que a taxa de transação vale também para o Pix, ficava
+  de fora; (2) o prompt de conhecimento trata fontes que se contradizem (Pix "sem taxas de
+  cartão" × taxa de transação) relatando as duas, com citação, e onde o lojista confirma o valor;
+  (3) o verificador de saída ganhou a regra "número ausente não é afirmação sem base" (rejeita só
+  número, regra ou recurso que nenhuma fonte apoia); (4) supervisor, reescrita, especialista de
+  conhecimento e verificador rodam com temperatura 0. Nenhum limiar foi mudado.
+- **Checagem do verificador** (4 execuções cada, mesma evidência): resposta honesta sobre a taxa
+  do Pix passou 4/4; resposta que inventa "0,99% para PJ" foi bloqueada 4/4.
+- **Juiz em lote**: support 1,00/1,00; knowledge **0,90** de faithfulness e **0,70** de relevância
+  (14 respostas julgadas). Relevância 0 em `sc-13-en-fanout`, `sc-17-followup` e
+  `sc-20-fanout-crediario`; o último também teve faithfulness 0.
+
+## Run de 2026-11-26, primeira rodada (prompts atuais, 3 passagens)
 
 Saída bruta: [data/golden-set-2026-11-26.json](data/golden-set-2026-11-26.json) e
 [data/golden-set-2026-11-26.log](data/golden-set-2026-11-26.log).

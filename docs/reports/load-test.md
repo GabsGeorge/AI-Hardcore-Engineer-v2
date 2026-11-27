@@ -56,6 +56,16 @@ Thresholds de bloqueio (ver `deploy/k6/chat.js`):
   `deploy/grafana/dashboards/operational.json` mostra a mesma distribuição pelo histograma
   `getnet_http_request_duration_seconds`.
 
+## Run de 2026-11-26 com pool de 30 conexões (`DB_POOL_MAX_SIZE=30`)
+
+Mesmo cenário (20 VUs × 5 min). Saída em [data/load-2026-11-26-pool30.txt](data/load-2026-11-26-pool30.txt).
+
+| Cenário | média | mediana | p90 | p95 | alvo |
+|---|---|---|---|---|---|
+| simples | 10,5 s | 9,6 s | 14,7 s | **17,8 s** | < 8 s ❌ |
+| composto | 15,8 s | 15,3 s | 19,4 s | **28,0 s** | < 15 s ❌ |
+| erros HTTP | | | | **0/459** | < 1 % ✅ |
+
 ## Run de 2026-11-26 (plano do supervisor em paralelo com o classificador)
 
 20 VUs × 5 min, 20 tokens (`k6user01..20`), `gpt-4o-mini`. Saída completa em

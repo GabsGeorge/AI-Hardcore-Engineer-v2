@@ -31,7 +31,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     configure_logging()
     configure_tracing(settings.otel_exporter_otlp_endpoint)
-    pool = await open_pool(settings.database_url)
+    pool = await open_pool(settings.database_url, settings.db_pool_max_size)
     await migrate(pool)
     checkpointer = AsyncPostgresSaver(pool)
     await checkpointer.setup()

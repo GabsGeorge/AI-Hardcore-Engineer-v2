@@ -90,7 +90,7 @@ def test_input_guard_runs_at_temperature_zero(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(s, "openai_model_primary", "primary-model")
     monkeypatch.setattr(s, "openai_model_fallback", "")
     assert get_model("input_guard").inner.temperature == 0.0
-    assert get_model("supervisor").inner.temperature is None
+    assert get_model("synthesize").inner.temperature is None
 
 
 def _normalize(text: str) -> str:

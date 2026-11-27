@@ -30,11 +30,21 @@ def get_model(role: str) -> Any:
     return TracedModel(_real_model(ROLE_TEMPERATURE.get(role)), role, s.openai_model_primary)
 
 
-# Classifier roles answer the same message the same way: at the API default temperature the
-# input guard blocked "Show my settlements for CNPJ ... this week" in 2 of 5 runs and let it
-# through in the other 3 (docs/reports/data/input-guard-probe-2026-11-26.json). Other roles
-# keep the provider default.
-ROLE_TEMPERATURE: dict[str, float] = {"input_guard": 0.0}
+# Roles that classify, plan or answer from sources run at temperature 0, so the same message
+# gets the same verdict, route and self-assessed confidence:
+# - input_guard blocked "Show my settlements for CNPJ ... this week" in 2 of 5 runs at the API
+#   default (docs/reports/data/input-guard-probe-2026-11-26.json);
+# - the knowledge specialist rated the same crediário answer 0.8, 0.4, 0.6 and 0.8 in four
+#   runs, and confidence decides between answering and escalating (golden sc-19/sc-20);
+# - output_guard is a yes/no verifier: the same reply must get the same verdict.
+# Synthesis, summaries and escalation notes keep the provider default.
+ROLE_TEMPERATURE: dict[str, float] = {
+    "input_guard": 0.0,
+    "output_guard": 0.0,
+    "supervisor": 0.0,
+    "knowledge_rewrite": 0.0,
+    "knowledge": 0.0,
+}
 
 
 def _real_model(temperature: float | None = None) -> Any:

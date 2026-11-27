@@ -20,3 +20,6 @@ def test_fee_that_is_not_a_public_number_is_answered_not_reported_missing() -> N
     # "not found" keeps its low confidence when the context says nothing about the fee.
     assert 'Use "not found" (at most 0.2) only when the context says nothing' in answer_prompt
     assert "`taxa por transação MDR Getnet`" in rewrite_prompt
+    # Getnet's own pages disagree on Pix fees: report both, cited, and where to confirm.
+    assert "When two items seem to disagree" in answer_prompt
+    assert "do not\n    pick one and do not give up" in answer_prompt

@@ -101,22 +101,23 @@ falta o teste que o prove. O E2E de privacidade (T080) foi feito em 2026-11-26, 
 independente mostrou que a tela era um placeholder; a listagem de sessões (T039) ganhou teste de
 integração para o lojista vinculado (QA-060), mas a task continua parcial.
 
-## 8. Golden set abaixo do gate na rota exata
+## 8. Golden set: acima do gate, com um cenário instável
 
-- **Onde**: [docs/reports/eval.md](reports/eval.md) (run de 2026-11-26 com os prompts atuais,
-  saída bruta em `docs/reports/data/golden-set-2026-11-26.*`).
-- **O que**: com a checagem de rota **exata**, 3 passagens deram **86,7% de média e 85% de
-  mínimo** (gate 95%; era 88,3% em 2026-11-25). `sc-02-knowledge-pix` e `sc-13-en-fanout` (taxa do
-  Pix) falham sempre; `sc-20-fanout-crediario` passa em 1 de 3.
-- **Causa medida**: o supervisor despacha certo. Sobre taxa do Pix, as páginas da Getnet na base
-  se contradizem ("sem taxas de cartão" × "taxa de transação ... Pix") e não trazem número; a
-  especialista responde com confiança parcial e a política escala após o replanejamento, como a
-  spec manda. O crediário foi resolvido no teste direto (confiança 0,8, regra 11 do prompt de
-  conhecimento), mas no fan-out ainda cai abaixo de 0,70 em parte das passagens.
-- **Não feito de propósito**: afrouxar a checagem, baixar `CONFIDENCE_ESCALATE_HARD` ou mudar o
+- **Onde**: [docs/reports/eval.md](reports/eval.md) (segunda rodada de 2026-11-26, saída bruta em
+  `docs/reports/data/golden-set-2026-11-26-v2.*`).
+- **O que**: rota exata **98,3% de média e 95% de mínimo** em 3 passagens (gate 95%: passa; era
+  86,7% na primeira rodada do dia e 88,3% em 2026-11-25). `sc-02-knowledge-pix` (taxa do Pix
+  para PJ) passa em 1 de 3; nenhum cenário falha sempre.
+- **Por que o sc-02 ainda oscila**: as páginas da Getnet se contradizem sobre a taxa do Pix e não
+  trazem número. A resposta certa é relatar as duas fontes e dizer onde o lojista vê o valor do
+  plano; ela sai na maioria das vezes, mas numa passagem o verificador de saída ainda trocou a
+  resposta e noutra a especialista ficou abaixo de 0,70 e o turno escalou.
+- **Juiz em lote**: relevância 0,70 no conhecimento, com `sc-13`, `sc-17` e `sc-20` em 0 (ver
+  eval.md); não investigado nesta rodada.
+- **Não feito de propósito**: baixar `CONFIDENCE_REPLAN`/`CONFIDENCE_ESCALATE_HARD` ou mudar o
   gabarito.
-- **Evolução**: fonte oficial única sobre a taxa do Pix (se a Getnet publicar); no fan-out,
-  sintetizar as partes com base e escalar só a parte sem base.
+- **Evolução**: fonte oficial única sobre a taxa do Pix (se a Getnet publicar); olhar as três
+  respostas com relevância 0.
 
 ## 9. Itens recomendados: C1 e C2 feitos, com ressalvas
 
@@ -156,25 +157,32 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
 
 ## 11. Latência acima do SLO com o modelo real
 
-- **Onde**: grafo inteiro (`gpt-4o-mini` em até 6 chamadas por turno: guardrail de entrada,
-  supervisor, especialistas, síntese, guardrail de saída) e a busca (até 4 consultas com
-  reranker em CPU por turno de conhecimento), num processo uvicorn só.
-- **Medições**: QA independente, 20 usuários × 5 min: p95 17,7 s / 18,4 s (simples / composto);
-  rodada 3 do QA: 28,3 s / 27,3 s. **2026-11-26, depois do primeiro passo abaixo**: 25,4 s /
-  30,6 s, 332 pedidos, 0 erros ([reports/data/load-2026-11-26.txt](reports/data/load-2026-11-26.txt)).
-  Meta: 8 s / 15 s (QA-037, QA-038).
-- **Primeiro passo feito (2026-11-26)**: o plano do supervisor roda em paralelo com o
-  classificador de entrada (`input_guardrail`), e é descartado se o turno for bloqueado. Sem
-  carga, 15 turnos sequenciais: média 7,7 s → 7,2 s, mediana 7,3 s → 6,7 s (uma chamada de LLM a
-  menos no caminho crítico). **Sob carga o ganho não aparece**: o p95 ficou no mesmo patamar.
-- **Onde está o tempo sob carga**: sem carga um turno leva ~7 s; com 20 usuários, ~17 s de média.
-  A OpenAI quase não recusou (3 retries em 332 pedidos), então a espera cresce dentro do
-  processo: a busca faz BM25 e reranker em threads do mesmo processo, que disputam a CPU do
-  container. Não há métrica por chamada de LLM para separar as parcelas; os spans no Tempo têm a
-  duração de cada nó.
-- **Evolução**: mais workers/réplicas da API (o estado já está no Postgres/Redis), reranker fora
-  do processo ou só quando a busca densa fica ambígua, e modelo menor para o `input_guard`;
-  medir de novo com `deploy/k6/chat.js` e 20 tokens.
+- **Onde**: grafo inteiro (`gpt-4o-mini` em até 6 chamadas sequenciais por turno: guardrail de
+  entrada, supervisor, reescrita da busca, especialista, síntese quando há mais de um,
+  guardrail de saída).
+- **Medições com 20 usuários × 5 min** (meta: p95 8 s simples / 15 s composto):
+
+  | Rodada | p95 simples | p95 composto | média simples | pedidos | erros |
+  |---|---|---|---|---|---|
+  | QA independente | 17,7 s | 18,4 s | | | |
+  | Rodada 3 do QA | 28,3 s | 27,3 s | | 75 | 0 |
+  | 2026-11-26, plano em paralelo | 25,4 s | 30,6 s | 16,1 s | 332 | 0 |
+  | **2026-11-26, + pool de 30 conexões** | **17,8 s** | **28,0 s** | **10,5 s** | **459** | 0 |
+
+  Saídas em [reports/data/load-2026-11-26.txt](reports/data/load-2026-11-26.txt) e
+  [load-2026-11-26-pool30.txt](reports/data/load-2026-11-26-pool30.txt).
+- **O que foi feito**: (1) o plano do supervisor roda em paralelo com o classificador de entrada
+  (sem carga: média 7,7 s → 7,2 s); (2) o pool de conexões da api com o Postgres passou de 10
+  para 30 (`DB_POOL_MAX_SIZE`): cada passo do grafo grava um checkpoint, e com 20 turnos ao mesmo
+  tempo os turnos esperavam conexão. Com isso a média sob carga caiu 35% e a vazão subiu 38%.
+- **O que foi medido e descartado**: a CPU da api ficou em ~35% com o pool antigo e o Postgres
+  em 2% (não era CPU nem banco); 3 workers uvicorn com o pool novo não melhoraram o p95 (20,4 s /
+  27,7 s numa corrida de 90 s, contra 18,4 s / 22,1 s com um processo) e exigiriam métricas
+  Prometheus multiprocesso; a OpenAI recusou 3 de 332 pedidos (não é limite da chave).
+- **O que ainda falta**: sob carga cada chamada ao modelo fica mais lenta, e o turno tem até 6
+  em sequência; a cauda (p95) do composto segue em 28 s. Próximos passos: modelo menor para os
+  classificadores, reescrita da busca em paralelo com a primeira busca, e resposta por streaming
+  na tela (o endpoint `/v1/chat/stream` já existe) para o lojista ver o texto antes do fim.
 
 ## 12. `X-Real-IP` confiável só atrás do nginx
 
@@ -206,6 +214,10 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   Na rodada 3 do QA o S01 em inglês (Get Clássica × Get Smart) foi trocado uma vez; repetido 10
   vezes em seguida com a mesma pergunta, passou nas 10 com fonte. É o mesmo falso positivo
   intermitente, não um defeito de recuperação.
+- **2026-11-26**: o verificador roda com temperatura 0 e ganhou a regra 10 de
+  `prompts/grounding.md` ("número ausente não é afirmação sem base"): com a mesma evidência, a
+  resposta honesta sobre a taxa do Pix passou 4/4 e a que inventa "0,99%" foi bloqueada 4/4. No
+  golden ainda trocou a resposta do sc-02 em 1 de 3 passagens.
 - **Evolução**: verificador com modelo maior, ou checagem por afirmação (quebrar a resposta em
   frases e checar cada uma contra a passagem citada), medindo acertos e falsos positivos juntos.
 - **Evidência**: [reports/qa-e2e-resposta.md](reports/qa-e2e-resposta.md).

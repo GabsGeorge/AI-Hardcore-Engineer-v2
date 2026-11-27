@@ -110,13 +110,28 @@ async def _search(
             for q, lang in queries
         )
     )
+    hits = merge_hits([output or [] for output, _ in calls])
+    return hits, [record for _, record in calls], any(r["status"] == "ok" for _, r in calls)
+
+
+def merge_hits(per_query: list[list[KbHit]], k: int = TOP_K) -> list[KbHit]:
+    """Top-k over all query variants, where each variant first contributes its best passage.
+
+    Sorting the union by score alone let one strong topic fill the five slots: for "Quais as
+    taxas do Pix para PJ?" the Pix pages pushed out the MDR page that the `taxa por transação`
+    variant had found, and the answer said "não encontrei" (golden sc-02).
+    """
     best: dict[int, KbHit] = {}
-    for output, _ in calls:
-        for hit in output or []:
+    for hits in per_query:
+        for hit in hits:
             if hit.chunk_id not in best or hit.score > best[hit.chunk_id].score:
                 best[hit.chunk_id] = hit
-    hits = sorted(best.values(), key=lambda h: h.score, reverse=True)[:TOP_K]
-    return hits, [record for _, record in calls], any(r["status"] == "ok" for _, r in calls)
+    leaders = {hits[0].chunk_id for hits in per_query if hits}
+    first = sorted((best[c] for c in leaders), key=lambda h: h.score, reverse=True)[:k]
+    rest = sorted(
+        (h for c, h in best.items() if c not in leaders), key=lambda h: h.score, reverse=True
+    )
+    return sorted([*first, *rest][:k], key=lambda h: h.score, reverse=True)
 
 
 def _as_data(text: str) -> str:

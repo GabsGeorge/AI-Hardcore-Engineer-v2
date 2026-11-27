@@ -55,3 +55,13 @@ def test_knowledge_confidence_field_tells_the_model_what_the_number_means() -> N
 
     description = KnowledgeAnswer.model_fields["confidence"].description or ""
     assert "0.8-1.0" in description and "at most 0.2 only when" in description
+
+
+def test_grounding_does_not_reject_a_reply_for_lacking_a_number_the_sources_lack() -> None:
+    # Golden sc-02: "Quais as taxas do Pix para PJ?" The sources say the per-transaction fee
+    # applies to Pix and varies by plan, with no figure. The checker rejected the honest reply
+    # because "no source gives the exact Pix fee"; an invented 0,99% must still be rejected.
+    prompt = load_prompt("grounding")
+    assert "A missing number is not an unsupported claim" in prompt
+    assert "Reject it only if it states a figure, a rule or a capability" in prompt
+    assert prompt.index("\n9. ") < prompt.index("\n10. ")

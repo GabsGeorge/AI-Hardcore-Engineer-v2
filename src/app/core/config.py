@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     # Thresholds originais do contrato. Valores anteriores (0.50/0.25) foram atalhos
     # para mascarar hedge do modelo; voltamos a 0.70/0.40 e a calibração do retriever
     # cabe ao score real (não ao supervisor).
+    # Connections the API keeps to Postgres. Every graph step writes a checkpoint, so 20
+    # concurrent turns share this pool with the repositories (docs/limitations.md §11).
+    db_pool_max_size: int = Field(10, ge=2, le=100)
     confidence_replan: float = Field(0.70, ge=0, le=1)
     confidence_escalate_hard: float = Field(0.40, ge=0, le=1)
     # Estratégia de retrieval escolhida pelos dados de `evals/retrieval_compare.py` (ADR 0003):
