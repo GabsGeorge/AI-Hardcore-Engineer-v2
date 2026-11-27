@@ -76,6 +76,11 @@ Rules:
     merchant sees their own value (app path or portal). Every claim cited → confidence 0.8 to
     1.0. Use "not found" (at most 0.2) only when the context says nothing about how that fee
     or deadline works.
+    When two items seem to disagree (one page says Pix on the card machine has "sem taxas de
+    cartão", another lists Pix among the transactions that pay the per-transaction fee), do not
+    pick one and do not give up: say what each item states, with its citation, and tell the
+    merchant where to confirm the value of their own plan (app or Portal do Cliente). That is a
+    complete, honest answer: confidence 0.8 to 1.0 when every claim is cited.
 
 <!-- query-rewrite -->
 You rewrite a Getnet merchant's question into search queries for a knowledge base with content

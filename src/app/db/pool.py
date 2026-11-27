@@ -9,14 +9,14 @@ Pool = AsyncConnectionPool[AsyncConnection[DictRow]]
 _pool: Pool | None = None
 
 
-async def open_pool(database_url: str) -> Pool:
+async def open_pool(database_url: str, max_size: int = 10) -> Pool:
     global _pool
     # autocommit + prepare_threshold=0 + dict_row are required by AsyncPostgresSaver.
     _pool = AsyncConnectionPool(
         database_url,
         connection_class=AsyncConnection[DictRow],
         min_size=1,
-        max_size=10,
+        max_size=max_size,
         open=False,
         kwargs={"autocommit": True, "prepare_threshold": 0, "row_factory": dict_row},
     )

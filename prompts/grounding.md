@@ -55,3 +55,9 @@ Rules:
    grounded, even though it disagrees with the question; and a reply never "claims" a figure just
    because the question mentioned it. Rule 5 targets a reply that presents the unsupported name
    or figure as true, not one that corrects it.
+10. **A missing number is not an unsupported claim.** When the question asks for a fee or price
+   and the sources give no single figure, a reply that says so (the fee is per transaction,
+   depends on the plan or contract, see it in the app) and states only what the sources say is
+   grounded: judge each sentence of the reply against the sources, not whether the reply contains
+   the number the question wanted. Reject it only if it states a figure, a rule or a capability
+   that no source supports.

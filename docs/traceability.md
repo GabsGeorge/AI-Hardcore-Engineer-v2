@@ -49,7 +49,7 @@ Gerado por `scripts/check_traceability.py` (REQ-INF-04).
 | REQ-RAG-02 | T024, T069, T079 | tests/integration/test_ingest.py, tests/integration/test_ingest_curated.py | ✅ |
 | REQ-RAG-03 | T070, T078 | tests/unit/test_chunking.py | ✅ |
 | REQ-RAG-04 | T071, T080, T159 | tests/integration/test_retriever.py, tests/integration/test_retriever_dense.py, tests/integration/test_retriever_resilience.py, tests/unit/test_bm25.py, tests/unit/test_retrieval_metrics.py, tests/unit/test_rrf.py | ✅ |
-| REQ-RAG-05 | T072, T080 | tests/integration/test_multi_query.py, tests/unit/test_knowledge_fee_answers.py, tests/unit/test_prompts_acronyms.py | ✅ |
+| REQ-RAG-05 | T072, T080 | tests/integration/test_multi_query.py, tests/unit/test_knowledge_fee_answers.py, tests/unit/test_knowledge_merge.py, tests/unit/test_prompts_acronyms.py | ✅ |
 | REQ-RAG-06 | T073, T082, T083 | tests/integration/test_knowledge.py, tests/unit/test_citation_renumber.py | ✅ |
 | REQ-RAG-07 | T073, T080, T083 | tests/integration/test_knowledge.py, tests/unit/test_knowledge_fee_answers.py | ✅ |
 | REQ-RAG-08 | T074, T081 | tests/unit/test_web_search.py | ✅ |
