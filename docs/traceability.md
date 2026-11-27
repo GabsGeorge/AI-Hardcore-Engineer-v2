@@ -38,7 +38,7 @@ Gerado por `scripts/check_traceability.py` (REQ-INF-04).
 | REQ-OBS-04 | T147, T155 | tests/unit/test_obs_profile.py, tests/unit/test_online_eval.py | ✅ |
 | REQ-OBS-05 | T148, T156 | tests/contract/test_feedback.py, tests/unit/test_observability_qa_fixes.py | ✅ |
 | REQ-OBS-06 | T157, T158, T168 | tests/integration/test_golden_scenarios.py, tests/unit/test_eval_checks.py, tests/unit/test_eval_exact_route.py | ✅ |
-| REQ-ORC-01 | T039, T041, T051, T127, T158 | tests/integration/test_golden_scenarios.py, tests/integration/test_graph_topology.py, tests/unit/test_parallel_plan.py, tests/unit/test_supervisor_plan.py, tests/unit/test_supervisor_prompt_routing.py | ✅ |
+| REQ-ORC-01 | T039, T041, T051, T127, T158 | tests/integration/test_golden_scenarios.py, tests/integration/test_graph_topology.py, tests/unit/test_parallel_plan.py, tests/unit/test_readme_graph.py, tests/unit/test_supervisor_plan.py, tests/unit/test_supervisor_prompt_routing.py | ✅ |
 | REQ-ORC-02 | T091, T095, T096 | tests/integration/test_graph_parallel.py, tests/integration/test_graph_paths.py | ✅ |
 | REQ-ORC-03 | T092, T095 | tests/integration/test_graph_replan.py | ✅ |
 | REQ-ORC-04 | T009, T042, T051, T052 | tests/integration/test_graph_budget.py, tests/integration/test_graph_paths.py, tests/unit/test_config.py | ✅ |
@@ -57,7 +57,7 @@ Gerado por `scripts/check_traceability.py` (REQ-INF-04).
 | REQ-REL-02 | T135, T141 | tests/unit/test_fallback.py | ✅ |
 | REQ-REL-03 | T134, T140 | tests/unit/test_resilience.py | ✅ |
 | REQ-REL-04 | T169, T170 | tests/test_infra_artifacts.py, tests/unit/test_knowledge_merge.py, tests/unit/test_parallel_plan.py | ✅ |
-| REQ-SEC-01 | T009, T013, T019, T027 | tests/integration/test_merchant_account_fixes.py, tests/security/test_admin_rbac.py, tests/security/test_api_auth.py, tests/security/test_auth_bearer_over_cookie.py, tests/security/test_csrf_middleware.py, tests/unit/test_auth.py, tests/unit/test_config.py | ✅ |
+| REQ-SEC-01 | T009, T013, T019, T027 | tests/integration/test_merchant_account_fixes.py, tests/security/test_admin_rbac.py, tests/security/test_api_auth.py, tests/security/test_auth_bearer_over_cookie.py, tests/security/test_csrf_middleware.py, tests/security/test_staff_identity.py, tests/unit/test_auth.py, tests/unit/test_config.py | ✅ |
 | REQ-SEC-02 | T014, T029, T030, T087 | tests/integration/test_chat_flow.py, tests/integration/test_me_conversations_isolation.py, tests/security/test_conversation_ownership.py, tests/security/test_security_idor.py, tests/unit/test_input_guard_decision.py, tests/unit/test_input_guard_prompt.py, tests/unit/test_input_guardrail_idor.py | ✅ |
 | REQ-SEC-03 | T038, T045, T046, T060, T063, T064, T084 | tests/contract/test_feedback.py, tests/security/test_injection_identity.py, tests/security/test_tools_identity.py, tests/unit/test_tool_interfaces.py | ✅ |
 | REQ-SEC-04 | T003, T004, T006, T008, T019, T036, T037, T168 | tests/integration/test_metrics.py, tests/test_repo_hygiene.py | ✅ |

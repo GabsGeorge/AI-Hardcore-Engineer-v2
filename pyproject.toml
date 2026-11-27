@@ -86,5 +86,10 @@ python_version = "3.12"
 strict = true
 mypy_path = "src"
 packages = ["app"]
-ignore_missing_imports = true
+# Every dependency is type-checked except the two that ship no types (no stubs, no py.typed).
+# A global ignore_missing_imports would also hide a new untyped dependency (QA review N11).
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["bm25s", "bm25s.*", "flashrank", "flashrank.*"]
+ignore_missing_imports = true

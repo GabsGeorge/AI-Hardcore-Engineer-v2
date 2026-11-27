@@ -5,8 +5,9 @@ Two emitters coexist for the duration of the UI web migration:
 - ``Authorization: Bearer <jwt>`` from ``scripts/issue_token.py`` and the 001 seed; still used
   by the API clients and k6; the ``sub`` is the ``users.id`` of the merchant seed.
 - A ``session`` cookie minted by ``src/app/auth/sessions.issue`` after a successful login via
-  the UI; the ``sub`` is the ``auth_accounts.id`` (``acc_*``), which translates to a seed
-  ``users.id`` through ``merchants.account_id`` when the admin has linked the account.
+  the UI; the ``sub`` is the ``auth_accounts.id`` (``acc_*``). A merchant account translates to
+  its ``users.id`` through ``merchants.account_id``; an operator/admin account is its own
+  ``users.id`` (one row per account, created on first use).
 """
 
 import time
@@ -86,32 +87,25 @@ async def _from_cookie(request: Request) -> CurrentUser | None:
     account = await auth_repo.get_account_by_id(get_pool(), claims.account_id)
     if account is None or account.status != "active" or account.role != claims.role:
         raise unauthorized()
-    # Traduz acc_* para a users.id correspondente. Para merchants, usa o vínculo
-    # merchants.account_id. Para operator/admin (sem tabela de vínculo própria),
-    # faz lookup por role na seed de users da 001 — essa é a referência que o grafo
-    # e os FKs de conversations/handoffs esperam. Sem essa tradução, qualquer
-    # operação dessas roles bate em ForeignKeyViolation.
+    # Traduz acc_* para a users.id que o grafo e os FKs de conversations/handoffs esperam.
+    # Merchant: o vínculo merchants.account_id. Operador/admin: uma linha de users própria,
+    # com o mesmo id da conta (QA review N2: antes, todas as contas do papel viravam o primeiro
+    # users.id seed e dividiam checkpoint, rate limit e operator_id dos tickets).
     user_id: str = account.id
     if account.role == "merchant":
         linked = await auth_repo.merchant_user_id_for(get_pool(), account.id)
         if linked is not None:
             user_id = linked
     else:
-        linked = await _seed_user_for_role(account.role)
-        if linked is not None:
-            user_id = linked
+        user_id = await _staff_user(account.id, account.role, account.display_name)
     return CurrentUser(id=user_id, role=account.role, account_id=account.id)
 
 
-async def _seed_user_for_role(role: str) -> str | None:
-    """Primeiro users.id ativo da role dada. Enquanto a 002 não introduzir uma
-    tabela operators/admins com vínculo explícito, usamos a seed da 001 como fonte."""
-    pool = get_pool()
-    async with pool.connection() as conn:
-        row = await (
-            await conn.execute("SELECT id FROM users WHERE role = %s ORDER BY id LIMIT 1", (role,))
-        ).fetchone()
-    return row["id"] if row else None
+async def _staff_user(account_id: str, role: str, display_name: str) -> str:
+    """users.id of an operator/admin web account: the account id itself. The upsert is a no-op
+    when the row exists with the same role (an admin may change the role of an account)."""
+    await auth_repo.upsert_staff_user(get_pool(), account_id, role, display_name)
+    return account_id
 
 
 async def current_user(

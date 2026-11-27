@@ -11,7 +11,7 @@ from app.core.prompts import load_prompt
 from app.graph.state import AgentState
 
 MEMORY_MAX_MESSAGES = 8  # when the thread grows beyond this, fold the oldest into `summary`
-KEEP_RECENT = 4  # the planner also looks at the last few messages (supervisor.RECENT_MESSAGES)
+KEEP_RECENT = 4  # kept verbatim after a fold; the planner reads all unfolded messages
 
 
 async def summarize(state: AgentState) -> dict[str, Any]:
