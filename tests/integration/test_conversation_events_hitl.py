@@ -5,7 +5,6 @@ The reply endpoint resumes the graph, which writes the reply as an AIMessage, an
 resolves the ticket. The channel used to take the answers present at open as a baseline and send
 `final_message` only for answers added later, so a channel opened between those two writes, or
 after both, never sent the reply: the merchant saw `respondido` with no answer, or nothing at all.
-That is how `apps/web/e2e/07-hitl-realtime.spec.ts` failed in CI (runs 45924616525, 46070852196).
 
 The test HTTP client buffers an EventSourceResponse until it ends (~60 s), so the generator is
 driven directly, with the real app, Postgres and graph. Its 1 s pause is replaced by a hook that

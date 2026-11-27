@@ -63,7 +63,11 @@ test("resposta do operador aparece no chat do lojista em até 5 s, sem recarrega
   await expect(operator.getByRole("heading", { name: /fila de atendimento/i })).toBeVisible();
   expect(await seriousA11yViolations(operator)).toEqual([]); // C3: axe na fila do operador
   await operator.goto(`/queue/${ticketId}`);
-  const reply = `Estorno aprovado (e2e ${Date.now()}).`;
+  // Marca única por execução SEM sequência longa de dígitos: o guardrail de saída mascara PII
+  // na resposta (src/app/guardrails/pii.py), e ~10% dos `Date.now()` (13 dígitos) passam no
+  // Luhn e viravam "[CARTAO]", então o texto esperado nunca aparecia. Era a falha intermitente
+  // deste teste (CI 45924616525, 46070852196, 46073927534). Em base 36 são ~8 caracteres.
+  const reply = `Estorno aprovado (e2e ${Date.now().toString(36)}).`;
   await operator.getByLabel(/resposta ao lojista/i).fill(reply);
   await operator.getByRole("button", { name: /enviar resposta/i }).click();
   const sentAt = Date.now();
