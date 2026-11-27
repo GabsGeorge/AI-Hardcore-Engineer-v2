@@ -14,7 +14,7 @@ from app.observability.tracing import TracedModel
 @pytest.fixture
 def real_models(monkeypatch: pytest.MonkeyPatch) -> None:
     s = get_settings()
-    monkeypatch.setattr(s, "openai_api_key", SecretStr("sk-test"))  # build only, no calls
+    monkeypatch.setattr(s, "openai_api_key", SecretStr("unused-test-key"))  # build only, no calls
     monkeypatch.setattr(s, "openai_model_primary", "primary-model")
 
 
