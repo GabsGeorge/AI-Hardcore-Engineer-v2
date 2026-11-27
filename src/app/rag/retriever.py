@@ -354,9 +354,10 @@ async def _search(query: str, lang: str | None, strategy: str) -> list[KbHit]:
         )
         by_id = {r["id"]: r for r in await cur.fetchall()}
     rows = [by_id[i] for i in fused if i in by_id]  # a chunk may vanish after a re-ingestion
-    # Rerank com degradação: se o cross-encoder cair ou estourar tempo, devolve top-K da
-    # ordem RRF com score 0.6 (abaixo do confidence_replan, para o supervisor decidir
-    # replan/escalate em vez de sintetizar resposta sem sinal real).
+    # Rerank com degradação: se o cross-encoder cair ou estourar tempo, a busca vira a
+    # estratégia densa calibrada (corte RAG_DENSE_THRESHOLD por passagem). Antes, o fallback
+    # dava nota fixa 0.6 a todo o top-K da ordem RRF, acima do RAG_RELEVANCE_THRESHOLD, e
+    # passagens que nenhum modelo validou passavam o filtro (revisão QA N7).
     try:
         with span(
             "retrieval.rerank", **{"rerank.model": RERANK_MODEL, "rerank.candidates": len(rows)}
@@ -372,7 +373,7 @@ async def _search(query: str, lang: str | None, strategy: str) -> list[KbHit]:
                 )
             except Exception as exc:
                 # Degradation, not a failure of the turn: the span says which path was taken.
-                rerank.set_attribute("rerank.outcome", "fallback_rrf")
+                rerank.set_attribute("rerank.outcome", "fallback_dense")
                 rerank.set_attribute("rerank.error", type(exc).__name__)
                 raise
             rerank.set_attribute("rerank.outcome", "ok")
@@ -392,15 +393,4 @@ async def _search(query: str, lang: str | None, strategy: str) -> list[KbHit]:
         ]
         return sorted(hits, key=lambda h: h.score, reverse=True)[:TOP_K]
     except (TimeoutError, Exception):  # noqa: BLE001 — degradação proposital
-        return [
-            KbHit(
-                chunk_id=r["id"],
-                title=r["title"],
-                url=r["url"],
-                section=r["section"],
-                content=r["content"],
-                score=0.6,
-                fetched_at=r["fetched_at"],
-            )
-            for r in rows[:TOP_K]
-        ]
+        return await _search_dense(pool, query, lang)

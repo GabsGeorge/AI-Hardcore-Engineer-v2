@@ -20,7 +20,7 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
 from app.auth import csrf as csrf_tokens
-from app.auth.sessions import COOKIE_NAME, CSRF_COOKIE_NAME
+from app.auth.sessions import COOKIE_NAME
 
 _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -43,16 +43,13 @@ def _needs_csrf(request: Request) -> bool:
 async def enforce_csrf(
     request: Request, call_next: Callable[[Request], Awaitable[Response]]
 ) -> Response:
-    if _needs_csrf(request):
-        cookie_value = request.cookies.get(CSRF_COOKIE_NAME)
-        header_value = request.headers.get(csrf_tokens.HEADER_NAME)
-        if not csrf_tokens.verify(cookie_value, header_value):
-            trace_id = getattr(request.state, "trace_id", None)
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "error": {"code": "csrf_failed", "message": "Missing or invalid CSRF token."},
-                    "trace_id": trace_id,
-                },
-            )
+    if _needs_csrf(request) and not csrf_tokens.request_token_ok(request):
+        trace_id = getattr(request.state, "trace_id", None)
+        return JSONResponse(
+            status_code=403,
+            content={
+                "error": {"code": "csrf_failed", "message": "Missing or invalid CSRF token."},
+                "trace_id": trace_id,
+            },
+        )
     return await call_next(request)

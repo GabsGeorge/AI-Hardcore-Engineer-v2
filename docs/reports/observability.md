@@ -38,7 +38,7 @@ Sem Langfuse e sem SaaS (ADR 0007).
 | `retrieval.bm25` | idem (estratégia `hybrid_rerank`) | `retrieval.k`, `retrieval.hits` |
 | `retrieval.dense` | `dense_hits` (as duas estratégias) | `retrieval.k`, `retrieval.lang`, `retrieval.hits` |
 | `retrieval.embedding` | `dense_hits`, em volta de `aembed_query` | `gen_ai.request.model` (modelo de embedding) |
-| `retrieval.rerank` | `search`, só na estratégia `hybrid_rerank` | `rerank.model`, `rerank.candidates`, `rerank.outcome` (`ok` ou `fallback_rrf`), `rerank.error` |
+| `retrieval.rerank` | `search`, só na estratégia `hybrid_rerank` | `rerank.model`, `rerank.candidates`, `rerank.outcome` (`ok` ou `fallback_dense`: o reranker falhou e a busca usou a estratégia densa calibrada), `rerank.error` |
 
 `prompt.version` é `sha256[:12]` do arquivo em `prompts/` (ADR 0009). O mapeamento papel →
 prompt está em `ROLE_PROMPTS` (`output_guard` → `grounding.md`; `knowledge_rewrite` →
@@ -103,6 +103,8 @@ e o Tempo roda com [deploy/tempo/tempo.yaml](../../deploy/tempo/tempo.yaml). O d
 **Getnet - Trace** ([deploy/grafana/dashboards/trace.json](../../deploy/grafana/dashboards/trace.json),
 uid `getnet-trace`) tem um campo `trace_id`: cole o `trace_id` da resposta de `POST /v1/chat`
 ou abra `http://localhost:3000/d/getnet-trace?var-trace_id=<trace_id>`.
+O Grafana pede login (`GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` do `.env` gerado por
+`scripts/bootstrap_env.sh`): não há acesso anônimo, e a porta 3000 só escuta em `127.0.0.1`.
 
 ## 2. Métricas (Prometheus)
 

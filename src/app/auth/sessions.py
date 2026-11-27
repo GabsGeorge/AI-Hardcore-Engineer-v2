@@ -119,35 +119,36 @@ async def current_session(pool: Pool, cookie_value: str) -> tuple[SessionClaims,
     clears the cookie.
     """
     claims = _decode(cookie_value)
+    # One statement on the hot path: bump `last_seen_at` only when the session is live, belongs
+    # to the cookie's account and is within the idle window (QA review N10: it was a SELECT ...
+    # FOR UPDATE plus this UPDATE). When nothing matches, a plain read says why, for the log.
     async with pool.connection() as conn:
         row = await (
             await conn.execute(
-                "SELECT jti, account_id, issued_at, last_seen_at, revoked_at, ip, user_agent"
-                " FROM auth_sessions WHERE jti = %s FOR UPDATE",
-                (claims.jti,),
-            )
-        ).fetchone()
-        if row is None or row["revoked_at"] is not None:
-            raise SessionError("revoked")
-        if row["account_id"] != claims.account_id:
-            raise SessionError("account_mismatch")
-        # Idle expiry: the UPDATE only matches rows still within the window; the RETURNING
-        # tells us whether we bumped. No row returned means the session was idle too long.
-        bumped = await (
-            await conn.execute(
                 "UPDATE auth_sessions SET last_seen_at = now()"
-                " WHERE jti = %s AND last_seen_at > now() - make_interval(secs => %s)"
-                " RETURNING last_seen_at",
-                (claims.jti, IDLE_LIMIT_SECONDS),
+                " WHERE jti = %s AND account_id = %s AND revoked_at IS NULL"
+                " AND last_seen_at > now() - make_interval(secs => %s)"
+                " RETURNING jti, account_id, issued_at, last_seen_at, revoked_at, ip, user_agent",
+                (claims.jti, claims.account_id, IDLE_LIMIT_SECONDS),
             )
         ).fetchone()
-    if bumped is None:
-        raise SessionError("idle")
+        if row is None:
+            stale = await (
+                await conn.execute(
+                    "SELECT account_id, revoked_at FROM auth_sessions WHERE jti = %s",
+                    (claims.jti,),
+                )
+            ).fetchone()
+            if stale is None or stale["revoked_at"] is not None:
+                raise SessionError("revoked")
+            if stale["account_id"] != claims.account_id:
+                raise SessionError("account_mismatch")
+            raise SessionError("idle")
     return claims, SessionRow(
         jti=row["jti"],
         account_id=row["account_id"],
         issued_at=row["issued_at"],
-        last_seen_at=bumped["last_seen_at"],
+        last_seen_at=row["last_seen_at"],
         revoked_at=row["revoked_at"],
         ip=row["ip"],
         user_agent=row["user_agent"],

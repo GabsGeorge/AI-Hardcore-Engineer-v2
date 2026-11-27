@@ -13,12 +13,16 @@ from langgraph.types import Command, Send
 from app.core.config import Settings, get_settings
 from app.core.llm import get_model
 from app.core.prompts import load_prompt
+from app.graph.memory import MEMORY_MAX_MESSAGES
 from app.graph.state import AgentResult, AgentState, PlanModel
 from app.graph.synthesize import language_cues, settle_language
 from app.observability.metrics import ROUTE_TAKEN
 
 Decision = Literal["synthesize", "replan", "escalate", "degrade"]
-RECENT_MESSAGES = 6
+# The planner sees every message the memory node has not folded into `summary` yet. With a
+# smaller window (it was 6) a thread of 7-8 messages hid its first ones from the planner: they
+# were neither in the last 6 nor in a summary (the fold only runs above MEMORY_MAX_MESSAGES).
+RECENT_MESSAGES = MEMORY_MAX_MESSAGES
 
 
 def decide(results: list[AgentResult], attempts: int, settings: Settings) -> Decision:

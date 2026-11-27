@@ -9,7 +9,8 @@ import pytest
 
 from app.db.pool import Pool
 from app.rag import retriever
-from tests.fixtures.kb import add_document
+from app.rag.chunking import passage
+from tests.fixtures.kb import MAQUININHAS, add_document, seed_kb
 
 pytestmark = pytest.mark.req("REQ-RAG-04", "REQ-REL-01")
 
@@ -79,3 +80,48 @@ def test_warmup_loads_the_model_once(monkeypatch: pytest.MonkeyPatch, tmp_path: 
     assert retriever.get_reranker().rerank("q", ["p"]) == [(0, 0.9)]
     assert len(calls) == 1
     assert threading.active_count() >= 1
+
+
+class _BrokenReranker:
+    def rerank(self, query: str, passages: list[str]) -> list[tuple[int, float]]:
+        raise RuntimeError("cross-encoder down")
+
+
+async def test_rerank_failure_falls_back_to_the_calibrated_dense_search(
+    db_pool: Pool, fake_llm: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """QA review N7: the fallback used to give every RRF candidate a fixed 0.6, above
+    RAG_RELEVANCE_THRESHOLD, so passages no model had validated passed the filter. Now it is
+    the dense strategy, with its per-passage threshold."""
+    await seed_kb(db_pool)
+    monkeypatch.setattr(retriever, "_cache", retriever.IndexCache())
+    retriever.set_reranker(_BrokenReranker())
+    try:
+        # The fake embeddings are deterministic: the text of a stored passage is its own best
+        # match, so the dense strategy has a hit above its threshold.
+        query = passage("Maquininhas Getnet", *MAQUININHAS[0])
+        fallback = await retriever._search(query, "pt", "hybrid_rerank")
+        dense = await retriever._search(query, "pt", "dense")
+    finally:
+        retriever.set_reranker(None)
+    assert dense, "the seeded KB must answer this query, or the comparison proves nothing"
+    assert [(h.chunk_id, h.score) for h in fallback] == [(h.chunk_id, h.score) for h in dense]
+    assert all(h.score != 0.6 for h in fallback)
+
+
+async def test_rerank_failure_with_nothing_above_the_dense_threshold_returns_nothing(
+    db_pool: Pool, fake_llm: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await seed_kb(db_pool)
+    monkeypatch.setattr(retriever, "_cache", retriever.IndexCache())
+    monkeypatch.setenv("RAG_DENSE_THRESHOLD", "0.999")
+    from app.core.config import get_settings
+
+    get_settings.cache_clear()
+    retriever.set_reranker(_BrokenReranker())
+    try:
+        assert await retriever._search("maquininha Get Smart", "pt", "hybrid_rerank") == []
+    finally:
+        retriever.set_reranker(None)
+        monkeypatch.delenv("RAG_DENSE_THRESHOLD")
+        get_settings.cache_clear()
