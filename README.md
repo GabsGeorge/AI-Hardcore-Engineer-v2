@@ -84,6 +84,7 @@ Redistributable). O `fakeredis` não persiste nada entre execuções.
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests      # pytest
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm lint       # ruff + mypy
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm web-tests  # Vitest
+export E2E_PASSWORD="$(openssl rand -hex 16)"   # senha das contas do E2E, gerada a cada execução
 docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm web-e2e    # Playwright
 ```
 
@@ -563,6 +564,12 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
    ```
 
    Abra `http://localhost/login` e entre com esse e-mail e senha.
+
+   > **A senha do admin vem só do `.env` gerado por `scripts/bootstrap_env.sh`.** Nunca use um
+   > valor que apareça em documento, relatório, issue ou histórico do git: qualquer senha que
+   > tenha ficado escrita em algum lugar deve ser tratada como exposta. O
+   > `create_demo_admin.py` não altera um admin que já existe: para trocar a senha dele, use
+   > "Esqueci minha senha" na tela de login (o link chega no Mailpit).
 2. **Conta do lojista `cliente1988`.** Numa janela anônima, cadastre-se em
    `http://localhost/register`, abra o link de verificação no Mailpit (`http://localhost:8025`) e
    confirme. De volta ao admin, em **Estabelecimentos** (`/admin/merchants`), vincule essa conta ao

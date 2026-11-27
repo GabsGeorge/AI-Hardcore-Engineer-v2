@@ -58,6 +58,7 @@ services:
   api:
     environment:
       APP_ENV: test
+      E2E_PASSWORD: ${E2E_PASSWORD:-}
     volumes:
       - ./tests:/app/tests:ro
     command: ["python", "-m", "tests.e2e_server"]
@@ -104,6 +105,7 @@ services:
     environment:
       PLAYWRIGHT_BASE_URL: http://web
       MAILPIT_URL: http://mailpit:8025
+      E2E_PASSWORD: ${E2E_PASSWORD:-}
     # testnet é internal (sem internet), então o `npm ci` runtime não consegue baixar
     # o playwright binário. `default` dá saída pública; mantemos `testnet` para alcançar
     # web/api/mailpit via DNS do compose. Ordem importa: o serviço pode usar as duas.

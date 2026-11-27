@@ -51,7 +51,7 @@ def test_planner_knowledge_and_verifier_run_at_temperature_zero(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     s = get_settings()
-    monkeypatch.setattr(s, "openai_api_key", SecretStr("sk-test"))  # build only, no calls
+    monkeypatch.setattr(s, "openai_api_key", SecretStr("unused-test-key"))  # build only, no calls
     monkeypatch.setattr(s, "openai_model_primary", "primary-model")
     monkeypatch.setattr(s, "openai_model_fallback", "")
     for role in ("supervisor", "knowledge_rewrite", "knowledge", "output_guard"):
