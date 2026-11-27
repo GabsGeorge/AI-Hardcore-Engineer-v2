@@ -27,6 +27,9 @@ class Script:
     def __init__(self, cycles: list[tuple[str, dict[str, Any] | None, int]]) -> None:
         self.cycles = cycles
         self.cycle = -1  # -1 = leitura feita antes do loop (abertura do canal)
+        # `escalation` do checkpoint: o resume do ticket grava `resolved`; um turno novo zera.
+        self.escalation: dict[str, Any] | None = None
+        self.unreadable: set[int] = set()  # ciclos em que aget_state falha
 
     def current(self) -> tuple[str, dict[str, Any] | None, int]:
         return self.cycles[max(self.cycle, 0)]
@@ -65,10 +68,12 @@ def script(monkeypatch: pytest.MonkeyPatch) -> Iterator[Script]:
 
 def _graph(s: Script) -> Any:
     async def aget_state(_: Any) -> Any:
+        if s.cycle in s.unreadable:
+            raise RuntimeError("checkpoint indisponível")
         answers = s.current()[2]
         messages: list[Any] = [HumanMessage(content="quero um atendente")]
         messages += [AIMessage(content=f"resposta {i}") for i in range(1, answers + 1)]
-        return SimpleNamespace(values={"messages": messages})
+        return SimpleNamespace(values={"messages": messages, "escalation": s.escalation})
 
     return SimpleNamespace(aget_state=aget_state)
 
@@ -121,3 +126,56 @@ async def test_sla_and_expiry_are_announced_once_each(script: Any) -> None:
     )
     names = [e["event"] for e in await _events(s)]
     assert names == ["sla_breached", "handoff_update", "handoff_expired"]
+
+
+_RESOLVED = {"id": TICKET, "status": "resolved", "priority": "normal"}
+_REPLIED = {"ticket_id": TICKET, "status": "resolved"}
+
+
+@pytest.mark.req("REQ-API-07", "REQ-HITL-03")
+async def test_reply_already_in_the_baseline_is_sent_before_resolved(script: Any) -> None:
+    """Canal aberto depois que o reply gravou a resposta, com o ticket ainda aberto."""
+    s = script([("awaiting_human", _awaiting(), 2), ("resolved", _RESOLVED, 2)])
+    s.escalation = _REPLIED
+    events = await _events(s)
+    assert [e["event"] for e in events] == ["final_message", "handoff_update"]
+    assert json.loads(events[0]["data"]) == {"content": "resposta 2"}
+    assert events[0]["id"] == "final_message:2"  # o mesmo id do caminho normal
+
+
+@pytest.mark.req("REQ-API-07", "REQ-HITL-03")
+async def test_channel_opened_on_a_resolved_ticket_sends_reply_then_status_once(
+    script: Any,
+) -> None:
+    s = script([("resolved", _RESOLVED, 2), ("resolved", _RESOLVED, 2)])
+    s.escalation = _REPLIED
+    events = await _events(s)
+    assert [e["event"] for e in events] == ["final_message", "handoff_update"]
+    assert events[0]["id"] == "final_message:2"
+    assert events[1]["id"] == f"handoff_update:{TICKET}:resolved"
+
+
+@pytest.mark.req("REQ-API-07")
+async def test_a_later_answer_is_never_sent_as_the_operator_reply(script: Any) -> None:
+    """Depois da resposta o lojista seguiu conversando: o turno novo zerou `escalation`, então a
+    última resposta não é a do atendente e só o status sai."""
+    s = script([("resolved", _RESOLVED, 3), ("resolved", _RESOLVED, 3)])
+    s.escalation = None
+    assert [e["event"] for e in await _events(s)] == ["handoff_update"]
+
+
+@pytest.mark.req("REQ-API-07", "REQ-HITL-03")
+async def test_resolved_waits_for_a_readable_checkpoint_so_the_reply_goes_first(
+    script: Any,
+) -> None:
+    s = script(
+        [
+            ("awaiting_human", _awaiting(), 2),
+            ("resolved", _RESOLVED, 2),
+            ("resolved", _RESOLVED, 2),
+        ]
+    )
+    s.escalation = _REPLIED
+    s.unreadable = {1}  # o 1º ciclo vê `resolved` mas não consegue ler a conversa
+    events = await _events(s)
+    assert [e["event"] for e in events] == ["final_message", "handoff_update"]
