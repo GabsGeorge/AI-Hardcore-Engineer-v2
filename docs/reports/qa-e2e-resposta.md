@@ -1,5 +1,12 @@
 # Resposta ao QA E2E independente (2026-11-26)
 
+> **Números do guardrail de entrada superados em 2026-11-26 (noite).** As taxas abaixo são da
+> manhã de 2026-11-26. Depois o prompt do classificador mudou, e os números atuais estão em
+> [limitations.md §10](../limitations.md#10-classificador-de-entrada-casos-que-ainda-erram) e em
+> [data/input-guard-probe-2026-11-26.json](data/input-guard-probe-2026-11-26.json): suíte interna
+> 0/34 pela API, frases do QA 0/96 e holdout escrito depois do prompt 0/60. A validação externa
+> definitiva depende de um novo QA independente.
+
 O relatório do QA (`docs/reports/qa-e2e.md` na branch `qa/e2e`, commit `62ba3d0`) testou a branch
 `fix/frontend-eval-guardrail` em `43bcb8b` e listou 92 achados (16 altos, 27 médios, 37 baixos, 12
 sem gravidade). Esta página diz, para cada um, o que mudou no código, qual teste cobre e o que foi
@@ -25,14 +32,14 @@ Evidência: [data/qa-recheck-2026-11-26.json](data/qa-recheck-2026-11-26.json) (
 frases do QA) e [data/guard-rates-2026-11-26.json](data/guard-rates-2026-11-26.json) (ataques e
 frases da suíte).
 
-| Medida | QA (antes) | Agora |
-|---|---|---|
-| Ataques da suíte bloqueados na entrada | 38/38 | **38/38** |
-| Frases legítimas do QA bloqueadas na entrada (32, fora do prompt) | 13/32 (40,6%) | **2/32 (6,3%)** |
-| Frases legítimas da suíte bloqueadas (34, a maioria com CPF/CNPJ) | 16/34 | **12/34** |
-| Turnos bloqueados na entrada nos 14 casos de chat do QA, 2 passagens (38 turnos, incl. continuações curtas) | continuações bloqueadas | **0/38** |
-| Cenário 8 (recusa) consulta a transação e o código 51 | 0/6 | **4/4** |
-| Turnos trocados pelo guardrail de saída | compostas 4/4 na 1ª rodada; S02, S07, S09, S10 intermitentes | **7/38** |
+| Medida | QA (antes) | Manhã de 2026-11-26 | Atual (2026-11-26, noite) |
+|---|---|---|---|
+| Ataques da suíte bloqueados na entrada | 38/38 | 38/38 | **38/38** (API) |
+| Frases legítimas do QA bloqueadas na entrada (32, fora do prompt) | 13/32 (40,6%) | 2/32 (6,3%) | **0/96** (sonda, 32 × 3) |
+| Frases legítimas da suíte bloqueadas (34, a maioria com CPF/CNPJ) | 16/34 | 12/34 | **0/34** (API) |
+| Turnos bloqueados na entrada nos 14 casos de chat do QA, 2 passagens (38 turnos, incl. continuações curtas) | continuações bloqueadas | **0/38** | — |
+| Cenário 8 (recusa) consulta a transação e o código 51 | 0/6 | **4/4** | — |
+| Turnos trocados pelo guardrail de saída | compostas 4/4 na 1ª rodada; S02, S07, S09, S10 intermitentes | **7/38** | — |
 
 Os 7 bloqueios de saída que sobraram, pelo motivo que o verificador registrou (o log agora traz
 quantas passagens e quantos dados de conta ele recebeu):
@@ -165,7 +172,7 @@ Resultado: 0 Crítico, 0 Alto, 0 Médio, 4 Baixo.
 | QA-R3-015–019 i18n | PASS em `/admin/accounts`; INFO no resto (dados, §13) |
 
 Os 4 Baixo que sobram são limitações já registradas em [limitations.md](../limitations.md):
-FP do guardrail de entrada em 2/32 = 6,2% contra a meta de ≤ 5% (§10), p95 acima do SLO (§11),
+FP do guardrail de entrada em 2/32 = 6,2% contra a meta de ≤ 5% (§10; superado na mesma noite: 0/96 nas frases do QA pela sonda, a confirmar por um novo QA independente), p95 acima do SLO (§11),
 dados exibidos no idioma da conversa (§13) e o harness não achar o ticket novo como primeiro da
 fila em 2.1.b (dados de rodadas anteriores na fila, não falha da fila). No critério 10/10 do QA
 ficaram 6 de 8 itens; os 2 que faltam são justamente §10 e §11.

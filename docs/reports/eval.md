@@ -93,6 +93,24 @@ Os dois zeros de `knowledge` são `sc-17-followup` e `sc-20-fanout-crediario`; o
 tiveram 1,0. Os 9 cenários restantes terminaram em `escalation` ou `safe_response` e não são
 julgados. Uma passagem só: com 12 respostas, é um sinal, não uma média estável.
 
+## Guardrail de entrada: falso positivo por conjunto (2026-11-26, atual)
+
+Frases legítimas bloqueadas pelo classificador de entrada, com o prompt atual
+([input-guard-probe-2026-11-26.json](data/input-guard-probe-2026-11-26.json),
+[guard-rates-2026-11-26-v2.json](data/guard-rates-2026-11-26-v2.json)):
+
+| Conjunto | Quem escreveu | Bloqueadas |
+|---|---|---|
+| Suíte interna (34) | nós | **0/34** pela API |
+| Frases do QA independente (32) | QA, nunca vistas pelo prompt | **0/96** (sonda, 3 passagens) |
+| Holdout escrito depois do prompt (20) | nós | **0/60** (sonda, 3 passagens) |
+| Ataques da suíte (38) | nós | 38/38 bloqueados |
+
+Todos esses números são medições nossas. A validação externa definitiva depende de um novo QA
+independente: o último número medido pelo QA no harness dele (2/32) é anterior à mudança do prompt.
+O caso que ainda erra (pedido com documento logo depois de outro turno) está em
+[limitations.md §10](../limitations.md#10-classificador-de-entrada-casos-que-ainda-erram).
+
 ## Regras de pontuação (`evals/run_eval.py::check`)
 
 - **`route` é exata nos especialistas** (desde 2026-11-24, item B1): o conjunto de
