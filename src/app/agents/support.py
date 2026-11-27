@@ -41,6 +41,19 @@ def _confidence(records: list[ToolCallRecord]) -> float:
     return 1.0 if ok == len(records) else 0.5
 
 
+def account_evidence(tool: str, content: Any) -> str:
+    """What the output verifier reads for one support tool call. An empty result is spelled out:
+    with a bare ``[]`` the verifier judged "não encontrei maquininha cadastrada na sua conta" as
+    an unsupported claim and replaced the whole compound reply."""
+    if content in ([], {}, None):
+        return (
+            f"(account data from tool {tool})\n"
+            "No records: the tool ran successfully and the merchant's account has no matching "
+            "data (for diagnose_terminal: no card machine registered)."
+        )
+    return f"(account data from tool {tool})\n{json.dumps(content, ensure_ascii=False)}"
+
+
 async def support_node(state: SpecialistInput, config: RunnableConfig) -> dict[str, Any]:
     subtask, language = state["subtask"], state["language"]
     lang = "en" if language.startswith("en") else "pt"
@@ -90,10 +103,7 @@ async def support_node(state: SpecialistInput, config: RunnableConfig) -> dict[s
             ok = record["status"] == "ok"
             content = to_jsonable_python(output) if ok else {"error": record["status"]}
             if ok:
-                evidence.append(
-                    f"(account data from tool {call['name']})\n"
-                    f"{json.dumps(content, ensure_ascii=False)}"
-                )
+                evidence.append(account_evidence(call["name"], content))
             messages.append(
                 ToolMessage(
                     content=json.dumps(content, ensure_ascii=False), tool_call_id=call["id"] or ""
