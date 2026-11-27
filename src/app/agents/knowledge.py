@@ -94,22 +94,37 @@ async def _structured(
     return (parsed if isinstance(parsed, schema) else None), _tokens(out.get("raw"))
 
 
-async def _search(
+SearchCall = tuple[list[KbHit] | None, ToolCallRecord]
+
+
+async def _search_each(
     queries: list[tuple[str, str | None]], config: RunnableConfig
-) -> tuple[list[KbHit], list[ToolCallRecord], bool]:
-    """Best TOP_K hits over all queries, tool records, and whether any search worked."""
-    calls = await asyncio.gather(
-        *(
-            call_tool(
-                "knowledge",
-                "search_knowledge_base",
-                search_knowledge_base,
-                {"query": q, "lang": lang},
-                config,
+) -> list[SearchCall]:
+    """One `search_knowledge_base` call per query, in parallel."""
+    return list(
+        await asyncio.gather(
+            *(
+                call_tool(
+                    "knowledge",
+                    "search_knowledge_base",
+                    search_knowledge_base,
+                    {"query": q, "lang": lang},
+                    config,
+                )
+                for q, lang in queries
             )
-            for q, lang in queries
         )
     )
+
+
+async def _search(
+    queries: list[tuple[str, str | None]],
+    config: RunnableConfig,
+    prefetched: list[SearchCall] | None = None,
+) -> tuple[list[KbHit], list[ToolCallRecord], bool]:
+    """Best TOP_K hits over all queries (plus calls already made), tool records, and whether any
+    search worked."""
+    calls = [*(prefetched or []), *(await _search_each(queries, config) if queries else [])]
     hits = merge_hits([output or [] for output, _ in calls])
     return hits, [record for _, record in calls], any(r["status"] == "ok" for _, r in calls)
 
@@ -154,6 +169,15 @@ def _cited(reply: KnowledgeAnswer, count: int) -> list[int]:
     return valid or list(range(count))
 
 
+# A fee, rate or price question: its answer is on the MDR page, which only a query naming the
+# per-transaction fee finds. The rewrite prompt always writes that query; the planner did not
+# (for "Quais as taxas do Pix para pessoa jurídica?" it wrote 0 of 3 times, and the answer said
+# Pix has no per-transaction cost, which the MDR page contradicts). These keep the rewrite.
+_FEE_QUESTION = re.compile(
+    r"\b(?:taxas?|tarifas?|custos?|custa[mr]?|pre[çc]os?|mdr|fees?|rates?|prices?|pricing|costs?)\b",
+    re.IGNORECASE,
+)
+
 _MARKER = re.compile(r"\[(\d{1,3})\]")
 _REPEATED_MARKER = re.compile(r"(\[\d{1,3}\])(?:\s*\1)+")
 
@@ -187,6 +211,23 @@ def renumber_citations(
     return text, [by_url[url] for url in order]
 
 
+def evidence_by_source(
+    items: list[tuple[str, str]], item_sources: list[Source], sources: list[Source]
+) -> list[str]:
+    """The passages, grouped per page in the order of the renumbered ``sources``, so evidence
+    entry ``n`` is the page the answer cites as ``[n]``; pages no marker cites come after.
+
+    The output verifier numbers the evidence. In passage order, "taxa por transação [1]" (the MDR
+    page, renumbered to [1]) was checked against passage [1], the Pix page, and correct Pix fee
+    answers were replaced by "não encontrei base suficiente" (golden sc-02)."""
+    by_url: dict[str, list[str]] = {}
+    for (header, text), source in zip(items, item_sources, strict=True):
+        by_url.setdefault(source["url"], []).append(f"{header}\n{text}")
+    ordered = [by_url.pop(s["url"]) for s in sources if s["url"] in by_url]
+    ordered += list(by_url.values())
+    return ["\n\n".join(passages) for passages in ordered]
+
+
 async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict[str, Any]:
     subtask = state["subtask"]
     question = subtask["query"]
@@ -195,10 +236,25 @@ async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict
     answer_prompt, rewrite_prompt = _prompts()
     answer_system = answer_prompt.replace("{language}", language)
 
-    rewrite, tokens = await _structured(
-        "knowledge_rewrite", QueryRewrite, rewrite_prompt, f"Question:\n{question}"
-    )
-    rewrite = rewrite or QueryRewrite()
+    raw_query: tuple[str, str | None] = (question[:500], None)
+    planned = [
+        QueryVariant.model_validate(q)
+        for q in subtask.get("search_queries") or []
+        if not _FEE_QUESTION.search(question)
+    ]
+    raw_task: asyncio.Future[list[SearchCall]] | None = None
+    if planned:
+        # The supervisor already wrote the search queries in its plan: one LLM call less on the
+        # critical path of every knowledge turn (docs/limitations.md §11).
+        rewrite, tokens = QueryRewrite(variants=planned), 0
+    else:
+        # The search for the question as written does not depend on the rewrite: it runs while
+        # the rewrite model answers, and only the variants are searched afterwards.
+        raw_task = asyncio.ensure_future(_search_each([raw_query], config))
+        rewrite_reply, tokens = await _structured(
+            "knowledge_rewrite", QueryRewrite, rewrite_prompt, f"Question:\n{question}"
+        )
+        rewrite = rewrite_reply or QueryRewrite()
     # Allowlist restrita de topicos gerais que o merchant pode legitimamente perguntar
     # (clima + cambio). O enunciado so cobre esses dois casos via web_search; qualquer
     # outro assunto fora de Getnet deve cair em out_of_scope mesmo que o guardrail
@@ -230,10 +286,13 @@ async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict
         # Modelo marcou como geral mas nao bate com a allowlist: forca general=False
         # para nao chamar web_search em assunto fora de escopo.
         rewrite = QueryRewrite(variants=rewrite.variants, general=False)
-    queries = list(
-        dict.fromkeys([(question[:500], None), *((v.query, v.lang) for v in rewrite.variants)])
+    queries: list[tuple[str, str | None]] = list(
+        dict.fromkeys([raw_query, *((v.query, v.lang) for v in rewrite.variants)])
     )
-    hits, tools, kb_ok = await _search(queries, config)
+    if raw_task is not None:
+        hits, tools, kb_ok = await _search(queries[1:], config, await raw_task)
+    else:
+        hits, tools, kb_ok = await _search(queries, config)
     threshold = get_settings().rag_relevance_threshold
     relevant = [h for h in hits if h.score >= threshold]
 
@@ -287,7 +346,7 @@ async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict
             kb_answer,
             min(reply.confidence, relevant[0].score),
             kb_sources,
-            evidence=[f"{header}\n{text}" for header, text in items],
+            evidence=evidence_by_source(items, kb_items, kb_sources),
         )
 
     if not rewrite.general:
@@ -328,5 +387,5 @@ async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict
         web_answer,
         reply.confidence,
         web_sources,
-        evidence=[f"{header}\n{text}" for header, text in items],
+        evidence=evidence_by_source(items, web_items, web_sources),
     )

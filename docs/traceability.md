@@ -14,7 +14,7 @@ Gerado por `scripts/check_traceability.py` (REQ-INF-04).
 | REQ-GR-01 | T114, T119, T121 | tests/security/test_injection_direct.py, tests/security/test_injection_identity.py, tests/unit/test_input_guard_decision.py, tests/unit/test_input_guardrail_false_positives.py, tests/unit/test_input_guardrail_idor.py, tests/unit/test_parallel_plan.py | ✅ |
 | REQ-GR-02 | T010, T011, T022, T025, T039, T050, T053, T085 | tests/integration/test_chat_flow.py, tests/integration/test_graph_topology.py, tests/security/test_pii.py, tests/security/test_security_idor.py, tests/unit/test_logging.py, tests/unit/test_pii.py, tests/unit/test_pii_placeholders.py | ✅ |
 | REQ-GR-03 | T116, T119 | tests/integration/test_out_of_scope.py | ✅ |
-| REQ-GR-04 | T117, T120, T121 | tests/unit/test_output_guardrail.py, tests/unit/test_output_guardrail_context.py, tests/unit/test_output_guardrail_negatives.py | ✅ |
+| REQ-GR-04 | T117, T120, T121 | tests/unit/test_evidence_numbering.py, tests/unit/test_output_guardrail.py, tests/unit/test_output_guardrail_context.py, tests/unit/test_output_guardrail_negatives.py, tests/unit/test_support_empty_results.py | ✅ |
 | REQ-GR-05 | T082, T115, T121 | tests/integration/test_graph_paths.py, tests/integration/test_knowledge.py, tests/security/test_chat_render.py, tests/security/test_injection_indirect.py | ✅ |
 | REQ-HITL-01 | T108 | tests/integration/test_graph_escalation_route.py, tests/integration/test_hitl.py, tests/unit/test_ticket_context.py | ✅ |
 | REQ-HITL-02 | T100, T106, T108, T109 | tests/integration/test_hitl.py | ✅ |
@@ -56,7 +56,7 @@ Gerado por `scripts/check_traceability.py` (REQ-INF-04).
 | REQ-REL-01 | T097, T134, T140 | tests/integration/test_retriever_resilience.py, tests/integration/test_support_resilience.py, tests/unit/test_resilience.py | ✅ |
 | REQ-REL-02 | T135, T141 | tests/unit/test_fallback.py | ✅ |
 | REQ-REL-03 | T134, T140 | tests/unit/test_resilience.py | ✅ |
-| REQ-REL-04 | T169, T170 | tests/test_infra_artifacts.py, tests/unit/test_parallel_plan.py | ✅ |
+| REQ-REL-04 | T169, T170 | tests/test_infra_artifacts.py, tests/unit/test_knowledge_merge.py, tests/unit/test_parallel_plan.py | ✅ |
 | REQ-SEC-01 | T009, T013, T019, T027 | tests/integration/test_merchant_account_fixes.py, tests/security/test_admin_rbac.py, tests/security/test_api_auth.py, tests/security/test_auth_bearer_over_cookie.py, tests/security/test_csrf_middleware.py, tests/security/test_staff_identity.py, tests/unit/test_auth.py, tests/unit/test_config.py | ✅ |
 | REQ-SEC-02 | T014, T029, T030, T087 | tests/integration/test_chat_flow.py, tests/integration/test_me_conversations_isolation.py, tests/security/test_conversation_ownership.py, tests/security/test_security_idor.py, tests/unit/test_input_guard_decision.py, tests/unit/test_input_guard_prompt.py, tests/unit/test_input_guardrail_idor.py | ✅ |
 | REQ-SEC-03 | T038, T045, T046, T060, T063, T064, T084 | tests/contract/test_feedback.py, tests/security/test_injection_identity.py, tests/security/test_tools_identity.py, tests/unit/test_tool_interfaces.py | ✅ |

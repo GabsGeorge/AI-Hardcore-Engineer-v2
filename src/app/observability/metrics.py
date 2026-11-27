@@ -22,6 +22,21 @@ CHAT_TURN_LATENCY = Histogram(
     labelnames=("endpoint",),
     buckets=(0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 10.0, 12.0, 15.0, 20.0, 30.0, 60.0),
 )
+# Where a turn's time goes (docs/limitations.md §11): one histogram per graph node and one per
+# LLM role. Buckets cover a fast classifier call up to a node that waits on several calls.
+_STAGE_BUCKETS = (0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 3.0, 5.0, 8.0, 12.0, 20.0, 30.0)
+NODE_LATENCY = Histogram(
+    "getnet_graph_node_duration_seconds",
+    "Wall time of each graph node per turn.",
+    labelnames=("node",),
+    buckets=_STAGE_BUCKETS,
+)
+LLM_LATENCY = Histogram(
+    "getnet_llm_call_duration_seconds",
+    "Wall time of each LLM call per graph role.",
+    labelnames=("role",),
+    buckets=_STAGE_BUCKETS,
+)
 ROUTE_TAKEN = Counter("getnet_route_total", "Supervisor dispatches per node.", labelnames=("node",))
 TOKENS = Counter("getnet_tokens_total", "LLM tokens per graph role.", labelnames=("role",))
 TOOL_ERRORS = Counter("getnet_tool_errors_total", "Failed tool calls.", labelnames=("tool",))

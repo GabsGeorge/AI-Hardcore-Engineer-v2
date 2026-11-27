@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     openai_model_primary: str = ""
     openai_model_fallback: str = ""
+    # Smaller model for the short checks around a turn; empty = primary. The roles that use it
+    # (comma separated) default to all three: input classifier, output verifier, search rewrite.
+    openai_model_checks: str = ""
+    openai_model_checks_roles: str = "input_guard,output_guard,knowledge_rewrite"
     openai_embedding_model: str = "text-embedding-3-small"
 
     jwt_secret: SecretStr
