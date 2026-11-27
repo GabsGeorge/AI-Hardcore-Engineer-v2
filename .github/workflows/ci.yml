@@ -102,24 +102,32 @@ jobs:
   web-e2e:
     name: web-e2e (playwright + mailpit, rede isolada)
     runs-on: ubuntu-latest
-    env:
-      # pgvector exige senha superuser para inicializar o volume vazio do CI; o compose
-      # não traz default (prod recebe via .env). Sem isso, postgres sai com exit 1 e
-      # derruba web → web-e2e. Valor efêmero, só vale dentro deste job.
-      POSTGRES_PASSWORD: ci_test_password
+    # pgvector exige senha superuser para inicializar o volume vazio do CI; o compose
+    # não traz default (prod recebe via .env). Sem isso, postgres sai com exit 1 e
+    # derruba web → web-e2e. A senha é gerada no passo "materializar .env" e exportada em
+    # $GITHUB_ENV, efêmera, só dentro deste job.
     steps:
       - uses: actions/checkout@v4
       # ingest/api carregam Settings no boot; jwt_secret é obrigatório (>= 32 bytes).
       # As envs do job só chegam ao shell que invoca o compose; o compose só propaga
       # para os containers o que estiver em .env ou expandido no YAML. Materializamos
       # um .env efêmero com dummies longos (>= 32 bytes) só para o container subir.
-      - name: materializar .env dummy para o compose
+      - name: materializar .env efêmero para o compose
         run: |
-          cat > .env <<'EOF'
-          POSTGRES_PASSWORD=ci_test_password
-          JWT_SECRET=ci_jwt_secret_with_thirty_two_plus_bytes_long
-          SESSION_SECRET=ci_session_secret_thirty_two_plus_bytes_long
-          PASSWORD_PEPPER=ci_password_pepper_thirty_two_plus_bytes
+          # Segredos gerados a cada execução: nenhum valor fixo no repositório.
+          PG="$(openssl rand -hex 24)"
+          JWT="$(openssl rand -hex 32)"
+          SES="$(openssl rand -hex 32)"
+          PEP="$(openssl rand -hex 32)"
+          E2E="$(openssl rand -hex 16)"
+          for v in "$PG" "$JWT" "$SES" "$PEP" "$E2E"; do echo "::add-mask::$v"; done
+          echo "POSTGRES_PASSWORD=$PG" >> "$GITHUB_ENV"
+          echo "E2E_PASSWORD=$E2E" >> "$GITHUB_ENV"
+          cat > .env <<EOF
+          POSTGRES_PASSWORD=$PG
+          JWT_SECRET=$JWT
+          SESSION_SECRET=$SES
+          PASSWORD_PEPPER=$PEP
           OPENAI_API_KEY=
           SMTP_URL=smtp://mailpit:1025
           WEB_BASE_URL=http://web

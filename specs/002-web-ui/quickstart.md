@@ -27,7 +27,7 @@ Entre em [http://localhost/login](http://localhost/login) com `admin@getnet.loca
 ## 3. História 1 — cadastro e login
 
 - Abrir [http://localhost/register](http://localhost/register).
-- Nome: `Loja Demo`, e-mail: `demo@loja.local`, senha: `senha-segura-demo-456`.
+- Nome: `Loja Demo`, e-mail: `demo@loja.local`, senha: uma senha sua (mínimo 12 caracteres).
 - Mensagem genérica aparece.
 - Abrir [http://localhost:8025](http://localhost:8025) (Mailpit) e clicar no link de confirmação.
 - Fazer login. Aparece a tela de chat.

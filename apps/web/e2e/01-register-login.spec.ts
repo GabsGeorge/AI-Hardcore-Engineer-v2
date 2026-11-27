@@ -3,7 +3,8 @@ import { expect, test } from "@playwright/test";
 import { clearInbox, waitForLink } from "./mailpit";
 
 const EMAIL = `demo+${Date.now()}@example.com`;
-const PASSWORD = "senha-segura-demo-test";
+// Gerada a cada execução (nada literal no repositório): só precisa de ≥ 12 caracteres.
+const PASSWORD = `e2e-${crypto.randomUUID()}`;
 
 test.describe("US1 — Cadastro, login e saída", () => {
   test.beforeAll(async () => {

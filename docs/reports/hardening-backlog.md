@@ -1,5 +1,10 @@
 # Backlog de hardening — pós-E2E navegador
 
+> **Histórico (2026-11-02), não é o estado atual.** Os itens abaixo foram corrigidos ou
+> reavaliados depois; o estado atual está em [qa-e2e-resposta.md](qa-e2e-resposta.md) (achado
+> por achado do QA independente) e em [../limitations.md](../limitations.md) (o que ainda não
+> atinge a meta). Mantido só como registro.
+
 **Data**: 2026-11-02 ·
 **Fonte**: cruzamento de [e2e-api.md](e2e-api.md) (meu teste via curl) +
 [e2e-browser.md](e2e-browser.md) (teste real via navegador).
@@ -136,5 +141,6 @@ teste API.
 
 ## Credenciais trocadas
 
-A senha `GetnetDemo2026!` foi exposta no transcript da sessão do navegador.
+Uma senha de demonstração foi exposta no transcript da sessão do navegador (o valor foi
+removido deste documento em 2026-11-27).
 Trocar o `.env` do ambiente real antes de qualquer uso compartilhado.

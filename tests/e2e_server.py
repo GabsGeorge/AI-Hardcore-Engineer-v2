@@ -12,7 +12,9 @@ import asyncio
 import os
 import sys
 
-E2E_PASSWORD = "e2e-senha-de-teste-123456"
+# Password of the two E2E accounts: generated per run by the CI (or exported by whoever runs the
+# E2E locally) and read by the Playwright specs from the same variable. Nothing literal here.
+E2E_PASSWORD = os.environ.get("E2E_PASSWORD", "")
 E2E_ACCOUNTS = {
     "merchant": ("e2e-lojista@getnet.example.com", "Lojista E2E"),
     "operator": ("e2e-operador@getnet.example.com", "Operador E2E"),
@@ -45,6 +47,8 @@ async def seed_accounts() -> None:
 
 
 def main() -> None:
+    if len(E2E_PASSWORD) < 12:
+        sys.exit("E2E_PASSWORD (>= 12 chars) is required: export it before starting the E2E stack")
     if os.environ.get("APP_ENV") != "test":
         sys.exit("tests.e2e_server só roda com APP_ENV=test")
     from tests.e2e_llm import install

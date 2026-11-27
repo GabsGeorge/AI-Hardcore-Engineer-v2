@@ -86,7 +86,7 @@ def test_reason_and_fields_come_before_the_label() -> None:
 @pytest.mark.req("REQ-GR-01")
 def test_input_guard_runs_at_temperature_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     s = get_settings()
-    monkeypatch.setattr(s, "openai_api_key", SecretStr("sk-test"))  # build only, no calls
+    monkeypatch.setattr(s, "openai_api_key", SecretStr("unused-test-key"))  # build only, no calls
     monkeypatch.setattr(s, "openai_model_primary", "primary-model")
     monkeypatch.setattr(s, "openai_model_fallback", "")
     assert get_model("input_guard").inner.temperature == 0.0
