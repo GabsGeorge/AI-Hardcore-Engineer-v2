@@ -7,6 +7,8 @@
  * - 401 bubbles as `ApiError("unauthorized")`; the AuthGuard reacts to it.
  */
 
+import { readCsrfCookie } from "./csrf";
+
 const JSON_HEADERS = { "Content-Type": "application/json", Accept: "application/json" };
 
 export type ApiErrorBody = {
@@ -29,11 +31,6 @@ export class ApiError extends Error {
     super(message);
     this.name = "ApiError";
   }
-}
-
-function readCsrfCookie(): string | null {
-  const match = document.cookie.match(/(?:^|;\s*)csrf=([^;]+)/);
-  return match ? decodeURIComponent(match[1]!) : null;
 }
 
 async function parseError(response: Response): Promise<ApiError> {

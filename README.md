@@ -156,7 +156,54 @@ POST /v1/chat → [auth] → [identidade só no config, nunca no state (ADR 0005
 - **Checkpointer**: `AsyncPostgresSaver` no mesmo banco; a mesma `thread_id` sobrevive
   reinícios e permite retomada do interrupt.
 
-Diagrama completo em [docs/architecture.drawio](docs/architecture.drawio).
+O grafo compilado, gerado por `python scripts/graph_mermaid.py` (o teste
+`tests/unit/test_readme_graph.py` falha se este bloco ficar diferente do código; linha
+tracejada é aresta condicional):
+
+<!-- graph:begin -->
+```mermaid
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	input_guardrail(input_guardrail)
+	summarize(summarize)
+	supervisor(supervisor)
+	knowledge(knowledge)
+	support(support)
+	escalation(escalation)
+	synthesize(synthesize)
+	degraded_response(degraded_response)
+	safe_response(safe_response)
+	output_guardrail(output_guardrail)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> input_guardrail;
+	degraded_response --> output_guardrail;
+	escalation --> synthesize;
+	input_guardrail -.-> safe_response;
+	input_guardrail -.-> summarize;
+	knowledge --> supervisor;
+	summarize --> supervisor;
+	supervisor -.-> degraded_response;
+	supervisor -.-> escalation;
+	supervisor -.-> knowledge;
+	supervisor -.-> support;
+	supervisor -.-> synthesize;
+	support --> supervisor;
+	synthesize --> output_guardrail;
+	output_guardrail --> __end__;
+	safe_response --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
+```
+<!-- graph:end -->
+
+Diagrama completo, com API, banco e observabilidade, em
+[docs/architecture.drawio](docs/architecture.drawio) (abre no [draw.io](https://app.diagrams.net)).
 
 ### Pipeline RAG (ingestão → armazenamento → recuperação → geração)
 
@@ -209,16 +256,17 @@ qualquer página e a resposta cita o link da seção (`#offers-card`). As taxas 
 
 A estratégia padrão foi escolhida pelos dados, no conjunto rotulado de 14 perguntas — detalhes,
 calibração do limiar e limitações em
-[ADR 0003](docs/adr/0003-busca-hibrida.md#métricas-medidas):
+[ADR 0003](docs/adr/0003-busca-hibrida.md#métricas-medidas). Cada célula é
+recall@5 / MRR / nDCG@5; a coluna do meio é o número atual para o conjunto de calibração:
 
-| Estratégia    | recall@5 | MRR   | nDCG@5 |
-|---------------|----------|-------|--------|
-| **densa**     | **0,798**| **0,762** | **0,715** |
-| híbrida (RRF) | 0,690    | 0,690 | 0,630  |
+| Estratégia    | Calibração (14, medição original) | Remedição 2026-11-26 (mesmas 14) | Holdout 2026-11-26 (30, escritas depois) |
+|---------------|-----------------------------------|----------------------------------|------------------------------------------|
+| **densa**     | 0,798 / 0,762 / 0,715 | **0,702 / 0,667 / 0,615** | **0,967 / 0,867 / 0,881** |
+| híbrida (RRF) | 0,690 / 0,690 / 0,630 | 0,560 / 0,589 / 0,518 | 0,900 / 0,758 / 0,771 |
 
-Remedição de 2026-11-26: 0,702 neste conjunto e **0,967** num holdout de 30 perguntas escritas
-depois da calibração ([ADR 0003](docs/adr/0003-busca-hibrida.md#remedição-de-2026-11-26-e-holdout-c2)).
-O gate `recall@5 ≥ 0,90` **não é atingido** no conjunto ampliado (0,896 só nas 8 perguntas
+Dados brutos da remedição: [retrieval-2026-11-26.json](docs/reports/data/retrieval-2026-11-26.json)
+([ADR 0003](docs/adr/0003-busca-hibrida.md#remedição-de-2026-11-26-e-holdout-c2)).
+O gate `recall@5 ≥ 0,90` **não é atingido** no conjunto de calibração (0,896 só nas 8 perguntas
 originais); híbrida + rerank não foi remedida por instabilidade do reranker (0,479 na medição
 anterior). Amostra pequena: veja as ressalvas no ADR.
 
@@ -241,7 +289,10 @@ anterior). Amostra pequena: veja as ressalvas no ADR.
   frases legítimas de lojista em
   [tests/security/data/legit_phrases.yaml](tests/security/data/legit_phrases.yaml); taxas da
   heurística, da suíte e do classificador real em
-  [docs/reports/final-review.md](docs/reports/final-review.md).
+  [docs/reports/final-review.md](docs/reports/final-review.md). O 0/34 de falso positivo vale
+  **para a suíte do projeto**; o número por conjunto (inclusive as frases do QA independente,
+  que nunca entraram no prompt, e o caso que ainda erra) está em
+  [docs/limitations.md §10](docs/limitations.md#10-classificador-de-entrada-casos-que-ainda-erram).
 - Rate limit: 30 mensagens/min por usuário no chat; cadastro e pedido de troca de senha com 5 por
   hora por IP e por e-mail (429 + `Retry-After`).
 

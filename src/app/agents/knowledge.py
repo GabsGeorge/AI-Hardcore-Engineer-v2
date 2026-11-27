@@ -256,10 +256,10 @@ async def knowledge_node(state: SpecialistInput, config: RunnableConfig) -> dict
         )
         return {"results": [result], "route_trace": ["knowledge"], "tokens_used": tokens}
 
-    # Perguntas publicas (clima, cambio) sempre via web_search: KB tem so conteudo Getnet e
-    # o fallback RRF forca scores artificiais, entao hits de maquininha/Pix apareciam como
-    # 'relevantes' para uma pergunta de clima e o modelo tentava responder com material
-    # errado. Com general=True, pula direto para a rota de web_search.
+    # Perguntas publicas (clima, cambio) sempre via web_search: a KB tem so conteudo Getnet,
+    # e o antigo fallback RRF (nota fixa 0.6) fazia hits de maquininha/Pix parecerem
+    # 'relevantes' para uma pergunta de clima. Com general=True, pula direto para a rota de
+    # web_search.
     if relevant and not rewrite.general:
         items = [(f"{h.title} — {h.section} ({h.url})", h.content) for h in relevant]
         reply, used = await _structured(

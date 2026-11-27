@@ -104,6 +104,9 @@ julgados. Uma passagem só: com 12 respostas, é um sinal, não uma média está
 - `tools_contains`, `handoff`, `guardrails_input`, `pii_masked` e **`has_sources`** (B2, antes
   declarado no golden set e ignorado) são checados; uma expectativa desconhecida faz o eval
   falhar com erro, nada é ignorado em silêncio.
+- `has_sources` confere que a resposta **traz** fontes, não que elas sustentam o texto. Quem mede
+  se a resposta se apoia nas fontes é o juiz em lote (`evals/judge_batch.py`, fidelidade e
+  relevância por resposta, seção "Juiz em lote" acima), e em produção o guardrail de saída.
 - Gate: média da rota exata ≥ 95%, senão o script sai com código 1. O CI não roda a eval (gasta
   tokens).
 

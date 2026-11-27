@@ -68,13 +68,6 @@ class AuditEventOut(BaseModel):
     trace_id: str
 
 
-async def _require_csrf(request: Request) -> None:
-    cookie_value = request.cookies.get(cookie_sessions.CSRF_COOKIE_NAME)
-    header_value = request.headers.get(csrf_tokens.HEADER_NAME)
-    if not csrf_tokens.verify(cookie_value, header_value):
-        raise AppError(403, "csrf_failed", "Missing or invalid CSRF token.")
-
-
 async def _audit(
     request: Request,
     *,
@@ -127,7 +120,7 @@ async def invite(
     A duplicate e-mail returns the same 202 as a fresh invite — the SPA cannot tell them
     apart, which keeps enumeration shut (FR-004 extends to invites).
     """
-    await _require_csrf(request)
+    await csrf_tokens.require_csrf(request)
     pool = get_pool()
     existing = await auth_repo.get_account_by_email(pool, body.email)
     if existing is None:
@@ -164,7 +157,7 @@ async def invite(
 async def activate(
     account_id: str, request: Request, user: CurrentUser = Depends(_ADMIN)
 ) -> Response:
-    await _require_csrf(request)
+    await csrf_tokens.require_csrf(request)
     pool = get_pool()
     acc = await auth_repo.get_account_by_id(pool, account_id)
     if acc is None:
@@ -182,7 +175,7 @@ async def activate(
 async def deactivate(
     account_id: str, request: Request, user: CurrentUser = Depends(_ADMIN)
 ) -> Response:
-    await _require_csrf(request)
+    await csrf_tokens.require_csrf(request)
     if account_id == user.id:
         # Avoid locking the admin out of the system from the SPA.
         raise AppError(409, "cannot_deactivate_self", "Você não pode desativar sua própria conta.")
@@ -211,7 +204,7 @@ async def link_merchant(
 ) -> Response:
     """Idempotent for the same (merchant, account) pair; a second account on the same merchant
     returns 409 so the SPA shows the conflict (FR-021)."""
-    await _require_csrf(request)
+    await csrf_tokens.require_csrf(request)
     pool = get_pool()
     acc = await auth_repo.get_account_by_id(pool, body.account_id)
     if acc is None or acc.role != "merchant":
@@ -242,7 +235,7 @@ async def link_merchant(
 async def unlink_merchant(
     merchant_user_id: str, request: Request, user: CurrentUser = Depends(_ADMIN)
 ) -> Response:
-    await _require_csrf(request)
+    await csrf_tokens.require_csrf(request)
     await auth_repo.unlink_merchant(get_pool(), merchant_user_id)
     await _audit(
         request,

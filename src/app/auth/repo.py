@@ -98,6 +98,18 @@ async def get_account_by_email(pool: Pool, email: str) -> AccountRow | None:
     return _row_to_account(row) if row else None
 
 
+async def upsert_staff_user(pool: Pool, account_id: str, role: str, display_name: str) -> None:
+    """The ``users`` row of an operator/admin web account, keyed by the account id, so each
+    staff member has their own graph thread owner, rate-limit bucket and ticket operator_id."""
+    async with pool.connection() as conn:
+        await conn.execute(
+            "INSERT INTO users (id, role, display_name) VALUES (%s, %s, %s)"
+            " ON CONFLICT (id) DO UPDATE SET role = EXCLUDED.role"
+            " WHERE users.role IS DISTINCT FROM EXCLUDED.role",
+            (account_id, role, display_name.strip() or role),
+        )
+
+
 async def get_account_by_id(pool: Pool, account_id: str) -> AccountRow | None:
     async with pool.connection() as conn:
         row = await (

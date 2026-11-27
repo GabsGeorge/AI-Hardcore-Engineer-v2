@@ -13,8 +13,10 @@ Cada item lista **onde**, **o que** e **o caminho de evolução**.
   janela deslizante de 60 s (sorted set por `user_id`); pedido recusado não conta, e o
   `Retry-After` é o instante em que o pedido mais antigo sai da janela. Teste:
   `tests/security/test_rate_limit.py::test_burst_across_the_minute_boundary_is_limited`.
-- **Limite que fica**: é por `user_id` (`users.id`). Todas as contas de operador/admin agem como o
-  mesmo usuário seed (ver §13), então dividem o mesmo balde.
+- **Limite que fica**: é por `user_id` (`users.id`). Desde 2026-11-27 cada conta web de
+  operador/admin tem o próprio `users.id` (o id da conta), então cada uma tem o seu balde
+  (revisão QA N2). Só os tokens Bearer emitidos por `scripts/issue_token.py` para os usuários
+  seed (`operador01`, `admin01`) continuam sendo esses usuários.
 
 ## 2. Circuit breaker in-process
 
@@ -89,6 +91,14 @@ a quebrar a CI. A lista é curta por desenho.
   lojista recarregar a conversa.
 - **Evolução**: retomar o POST por `trace_id` exigiria guardar o resultado do turno no servidor
   (o `Idempotency-Key` já faz isso para `/v1/chat`).
+- **Custo do canal de eventos** (revisão QA N9): `/v1/conversations/{id}/events` consulta o banco
+  a cada 1 s (o ticket, o checkpoint da conversa e o último handoff: 3 leituras) e fecha após 60
+  ciclos; o navegador reabre. São no máximo 3 canais por usuário (`SSE_EVENTS_MAX_PER_USER`), ou
+  seja até 9 leituras/s por usuário com a conversa aberta, todas por chave primária. Com o volume
+  atual isso não pesa no pool (30 conexões); com muitos lojistas simultâneos, sim.
+  **Evolução**: `LISTEN/NOTIFY` do Postgres (um gatilho em `handoffs`/`conversations` e um
+  ouvinte por processo que distribui aos canais), mantendo a ordem `final_message` antes de
+  `handoff_update`, que hoje vem da leitura em sequência.
 
 ## 7. Testes planejados que não existem
 
@@ -147,6 +157,19 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   ([input-guard-probe-2026-11-26.json](reports/data/input-guard-probe-2026-11-26.json), 3
   passagens): 0/96 nas frases do QA, 0/60 num holdout legítimo escrito depois do prompt, 48/48
   ataques do holdout e todas as perguntas fora de escopo bloqueadas.
+- **Falso positivo por conjunto** (uma taxa interna de 0% não vale para frases que o projeto não
+  viu; revisão QA N5):
+
+  | Conjunto | Quem escreveu | Exemplos no prompt? | Bloqueadas (legítimas) | Fonte |
+  |---|---|---|---|---|
+  | Suíte do projeto (34) | nós | só paráfrases, nunca as frases | 0/34 (API), 0/102 (sonda ×3) | guard-rates / probe 2026-11-26 |
+  | Frases do QA independente (32) | QA | não | 0/96 (sonda ×3) | probe 2026-11-26 |
+  | — mesmas 32, harness do próprio QA | QA | não | **2/32 (6,2%)**, medido antes da última mudança do prompt, ainda não remedido por ele | [qa-e2e-resposta.md](reports/qa-e2e-resposta.md) |
+  | Holdout legítimo (20) | nós, depois do prompt | não | 0/60 (sonda ×3) | probe 2026-11-26 |
+  | Pedido com documento após turno anterior (4) | nós | não | **3/12 (sonda ×3)** | probe 2026-11-26 |
+
+  O número a citar para frases de terceiros é o do harness do QA (6,2%) até ele remedir; a
+  sonda mede só o classificador, sem a API em volta.
 - **O que ainda erra**: com o turno anterior no contexto, um pedido seguinte com um documento
   diferente e sem possessivo ("Meu CPF é ..." e depois "Liste as vendas do CNPJ ... de ontem")
   ainda é lido como de outra parte (sonda `ctx-legit`: 3 de 12 execuções bloqueadas, todas
@@ -172,8 +195,11 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   Saídas em [reports/data/load-2026-11-26.txt](reports/data/load-2026-11-26.txt) e
   [load-2026-11-26-pool30.txt](reports/data/load-2026-11-26-pool30.txt).
 - **O que foi feito**: (1) o plano do supervisor roda em paralelo com o classificador de entrada
-  (sem carga: média 7,7 s → 7,2 s); (2) o pool de conexões da api com o Postgres passou de 10
-  para 30 (`DB_POOL_MAX_SIZE`): cada passo do grafo grava um checkpoint, e com 20 turnos ao mesmo
+  (sem carga: média 7,7 s → 7,2 s). Custo aceito (revisão QA N3): quando a entrada é bloqueada, o
+  plano é cancelado, mas os tokens que ele já gastou se perdem — um plano lê o prompt do supervisor
+  (3,9 mil caracteres, cerca de mil tokens) mais o esquema e a mensagem, menos de US$ 0,001 no
+  `gpt-4o-mini`, e só turnos bloqueados pagam isso; (2) o pool de conexões da api com o
+  Postgres passou de 10 para 30 (`DB_POOL_MAX_SIZE`): cada passo do grafo grava um checkpoint, e com 20 turnos ao mesmo
   tempo os turnos esperavam conexão. Com isso a média sob carga caiu 35% e a vazão subiu 38%.
 - **O que foi medido e descartado**: a CPU da api ficou em ~35% com o pool antigo e o Postgres
   em 2% (não era CPU nem banco); 3 workers uvicorn com o pool novo não melhoraram o p95 (20,4 s /
@@ -201,8 +227,11 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   não textos da interface. Com a UI em inglês, uma conversa em português continua aparecendo em
   português (QA-067, QA-069, QA-070). Os textos da interface (botões, rótulos, resultado da
   auditoria) foram traduzidos.
-- **Também**: todas as contas web de operador/admin agem como o primeiro `users.id` seed do papel
-  (`_seed_user_for_role`), então a auditoria e o rate limit não distinguem dois operadores.
+- **Resolvido em 2026-11-27**: as contas web de operador/admin agiam todas como o primeiro
+  `users.id` seed do papel, e o `operator_id` do ticket, o dono do checkpoint e o rate limit não
+  distinguiam dois operadores. Agora cada conta é o próprio `users.id`
+  (`tests/security/test_staff_identity.py`). Conversas antigas feitas por uma conta de
+  operador/admin ficam no usuário seed e não aparecem na lista dela.
 
 ## 14. Guardrail de saída ainda troca parte das respostas
 

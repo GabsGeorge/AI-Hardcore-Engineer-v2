@@ -13,6 +13,8 @@
  *    good), we do NOT retry: the channel stays closed and `onError` is called once.
  */
 
+import { readCsrfCookie } from "./csrf";
+
 export type SseHandlers = {
   onEvent?: (name: string, data: unknown) => void;
   onError?: (err: Error) => void;
@@ -43,11 +45,6 @@ export const CONVERSATION_EVENTS = [
   "sla_breached",
   "handoff_expired",
 ] as const;
-
-function readCsrfCookie(): string | null {
-  const match = document.cookie.match(/(?:^|;\s*)csrf=([^;]+)/);
-  return match ? decodeURIComponent(match[1]!) : null;
-}
 
 export async function streamPost(
   path: string,

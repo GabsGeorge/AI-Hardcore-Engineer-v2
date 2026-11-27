@@ -117,13 +117,6 @@ def _clear_session_cookies(response: Response) -> None:
         response.delete_cookie(name, path="/")
 
 
-async def _require_csrf(request: Request) -> None:
-    cookie_value = request.cookies.get(sessions.CSRF_COOKIE_NAME)
-    header_value = request.headers.get(csrf_tokens.HEADER_NAME)
-    if not csrf_tokens.verify(cookie_value, header_value):
-        raise AppError(403, "csrf_failed", "Missing or invalid CSRF token.")
-
-
 @router.post("/register", status_code=202, response_model=GenericPending)
 async def register(body: RegisterRequest, request: Request) -> GenericPending:
     """Autocadastro só cria lojista; operador/admin saem do convite admin (FR-001).
@@ -282,7 +275,7 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Log
 
 @router.post("/logout", status_code=204)
 async def logout(request: Request, response: Response) -> Response:
-    await _require_csrf(request)
+    await csrf_tokens.require_csrf(request)
     cookie_value = request.cookies.get(sessions.COOKIE_NAME)
     if cookie_value:
         try:
@@ -408,7 +401,7 @@ async def list_sessions(
 async def revoke_others(
     request: Request, user: CurrentUser = Depends(current_user_dep)
 ) -> Response:
-    await _require_csrf(request)
+    await csrf_tokens.require_csrf(request)
     cookie_value = request.cookies.get(sessions.COOKIE_NAME) or ""
     try:
         current_jti = sessions._decode(cookie_value).jti  # noqa: SLF001

@@ -14,7 +14,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from app.core.config import get_settings
-from app.core.resilience import CircuitOpen, get_breaker
+from app.core.resilience import CircuitOpen, with_circuit_breaker
 from app.observability.logging import get_logger
 from app.rag import retriever
 from app.tools import public_data
@@ -56,6 +56,12 @@ def _cache() -> Redis:
     return _redis
 
 
+@with_circuit_breaker("duckduckgo")
+async def _ddgs(query: str) -> list[dict[str, Any]]:
+    """DuckDuckGo text search off the event loop; failures count toward the breaker."""
+    return await asyncio.to_thread(ddgs_text, query, MAX_WEB_RESULTS)
+
+
 async def web_search(args: WebSearchInput, config: RunnableConfig) -> list[WebResult]:
     """Up to 5 results with the date they were retrieved; cached in Redis (research R-02). A cache
     failure only costs a fresh search."""
@@ -78,18 +84,11 @@ async def web_search(args: WebSearchInput, config: RunnableConfig) -> list[WebRe
         return figures
 
     # Circuit breaker: um DuckDuckGo instável abre o circuito e as próximas chamadas falham
-    # rápido (REQ-REL-03). O chamador trata CircuitOpen devolvendo lista vazia (degradado).
-    breaker = get_breaker()
+    # rápido (REQ-REL-03). Com o circuito aberto, a busca devolve lista vazia (degradado).
     try:
-        await breaker.before("duckduckgo")
+        raw = await _ddgs(args.query)
     except CircuitOpen:
         return []
-    try:
-        raw = await asyncio.to_thread(ddgs_text, args.query, MAX_WEB_RESULTS)
-    except Exception:
-        await breaker.record_failure("duckduckgo")
-        raise
-    await breaker.record_success("duckduckgo")
     now = datetime.now(UTC)
     results = [
         WebResult(
