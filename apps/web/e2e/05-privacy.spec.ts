@@ -8,8 +8,10 @@ import { expect, test, type Browser, type Page } from "@playwright/test";
  * compartilhada pelos outros specs.
  */
 
-// Gerada a cada execução (nada literal no repositório): só precisa de ≥ 12 caracteres.
-const PASSWORD = `e2e-${crypto.randomUUID()}`;
+// Senha das contas criadas por tests/e2e_server.py: vem do ambiente (o CI gera uma por execução).
+const PASSWORD = process.env.E2E_PASSWORD ?? "";
+if (PASSWORD.length < 12)
+  throw new Error("E2E_PASSWORD (>= 12 caracteres) precisa estar no ambiente");
 const MERCHANT = "e2e-lojista@getnet.example.com";
 const OPERATOR = "e2e-operador@getnet.example.com";
 
