@@ -105,6 +105,7 @@ uid `getnet-trace`) tem um campo `trace_id`: cole o `trace_id` da resposta de `P
 ou abra `http://localhost:3000/d/getnet-trace?var-trace_id=<trace_id>`.
 O Grafana pede login (`GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` do `.env` gerado por
 `scripts/bootstrap_env.sh`): não há acesso anônimo, e a porta 3000 só escuta em `127.0.0.1`.
+O Prometheus também só escuta em `127.0.0.1:9090`.
 
 ## 2. Métricas (Prometheus)
 

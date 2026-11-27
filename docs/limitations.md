@@ -200,13 +200,16 @@ integração para o lojista vinculado (QA-060), mas a task continua parcial.
   [load-2026-11-26-pool30.txt](reports/data/load-2026-11-26-pool30.txt) e
   [load-2026-11-27.txt](reports/data/load-2026-11-27.txt); tempo por etapa em
   [stages-2026-11-27.json](reports/data/stages-2026-11-27.json).
-- **O que foi feito**: (1) o plano do supervisor roda em paralelo com o classificador de entrada
-  (sem carga: média 7,7 s → 7,2 s). Custo aceito (revisão QA N3): quando a entrada é bloqueada, o
-  plano é cancelado, mas os tokens que ele já gastou se perdem — um plano lê o prompt do supervisor
-  (3,9 mil caracteres, cerca de mil tokens) mais o esquema e a mensagem, menos de US$ 0,001 no
-  `gpt-4o-mini`, e só turnos bloqueados pagam isso; (2) o pool de conexões da api com o
-  Postgres passou de 10 para 30 (`DB_POOL_MAX_SIZE`): cada passo do grafo grava um checkpoint,
-  e com 20 turnos ao mesmo tempo os turnos esperavam conexão. Com isso a média sob carga caiu 35% e a vazão subiu 38%.
+- **O que foi feito**: (1) o plano do supervisor roda em paralelo com o classificador de entrada;
+  (2) o pool de conexões da api com o Postgres passou de 10 para 30 (`DB_POOL_MAX_SIZE`): cada
+  passo do grafo grava um checkpoint, e com 20 turnos ao mesmo tempo os turnos esperavam conexão.
+  Com isso a média sob carga caiu 35% e a vazão subiu 38%.
+- **Trade-off do plano especulativo** (revisão QA N3): o plano começa antes de o classificador de
+  entrada decidir. **Ganho medido**: média sem carga de 7,7 s para 7,2 s por turno (15 turnos
+  sequenciais, mesmo build). **Custo**: quando a entrada é bloqueada, o plano é cancelado, mas os
+  tokens que ele já gastou se perdem. Um plano lê o prompt do supervisor (3,9 mil caracteres,
+  cerca de mil tokens) mais o esquema e a mensagem: menos de US$ 0,001 por turno bloqueado no
+  `gpt-4o-mini`. Só os turnos bloqueados pagam isso, e na suíte eles são os ataques.
 - **O que foi medido e descartado**: a CPU da api ficou em ~35% com o pool antigo e o Postgres
   em 2% (não era CPU nem banco); 3 workers uvicorn com o pool novo não melhoraram o p95 (20,4 s /
   27,7 s numa corrida de 90 s, contra 18,4 s / 22,1 s com um processo) e exigiriam métricas

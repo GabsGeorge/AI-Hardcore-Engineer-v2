@@ -203,8 +203,14 @@ graph TD;
 ```
 <!-- graph:end -->
 
-Diagrama completo, com API, banco e observabilidade, em
-[docs/architecture.drawio](docs/architecture.drawio) (abre no [draw.io](https://app.diagrams.net)).
+Diagramas completos, exportados de [docs/architecture.drawio](docs/architecture.drawio) por
+`python scripts/export_drawio.py` (o fonte abre no [draw.io](https://app.diagrams.net)):
+
+![Arquitetura: frontend, API, orquestração, dados, serviços externos e observabilidade](docs/architecture/1-arquitetura.png)
+
+![Grafo de orquestração: supervisor em ciclo e human-in-the-loop](docs/architecture/2-grafo.png)
+
+![Pipeline RAG: ingestão, armazenamento, recuperação e geração](docs/architecture/3-pipeline-rag.png)
 
 ### Pipeline RAG (ingestão → armazenamento → recuperação → geração)
 
@@ -255,21 +261,23 @@ qualquer página e a resposta cita o link da seção (`#offers-card`). As taxas 
 (Black Friday) e valem para Visa / Master; o texto registra a data da captura. Para atualizar:
 `node scripts/capture_offers.mjs && python scripts/build_curated_offers.py`, depois a ingestão.
 
-A estratégia padrão foi escolhida pelos dados, no conjunto rotulado de 14 perguntas — detalhes,
-calibração do limiar e limitações em
-[ADR 0003](docs/adr/0003-busca-hibrida.md#métricas-medidas). Cada célula é
-recall@5 / MRR / nDCG@5; a coluna do meio é o número atual para o conjunto de calibração:
+A estratégia padrão (densa) foi escolhida pelos dados, no conjunto rotulado de 14 perguntas —
+detalhes, calibração do limiar e limitações em
+[ADR 0003](docs/adr/0003-busca-hibrida.md#métricas-medidas). Números atuais, medidos em
+**2026-11-26** ([retrieval-2026-11-26.json](docs/reports/data/retrieval-2026-11-26.json)); cada
+célula é recall@5 / MRR / nDCG@5:
 
-| Estratégia    | Calibração (14, medição original) | Remedição 2026-11-26 (mesmas 14) | Holdout 2026-11-26 (30, escritas depois) |
-|---------------|-----------------------------------|----------------------------------|------------------------------------------|
-| **densa**     | 0,798 / 0,762 / 0,715 | **0,702 / 0,667 / 0,615** | **0,967 / 0,867 / 0,881** |
-| híbrida (RRF) | 0,690 / 0,690 / 0,630 | 0,560 / 0,589 / 0,518 | 0,900 / 0,758 / 0,771 |
+| Estratégia    | Calibração (14 perguntas) | Holdout (30 perguntas, escritas depois da calibração) |
+|---------------|---------------------------|-------------------------------------------------------|
+| **densa**     | **0,702 / 0,667 / 0,615** | **0,967 / 0,867 / 0,881** |
+| híbrida (RRF) | 0,560 / 0,589 / 0,518     | 0,900 / 0,758 / 0,771 |
 
-Dados brutos da remedição: [retrieval-2026-11-26.json](docs/reports/data/retrieval-2026-11-26.json)
-([ADR 0003](docs/adr/0003-busca-hibrida.md#remedição-de-2026-11-26-e-holdout-c2)).
-O gate `recall@5 ≥ 0,90` **não é atingido** no conjunto de calibração (0,896 só nas 8 perguntas
-originais); híbrida + rerank não foi remedida por instabilidade do reranker (0,479 na medição
-anterior). Amostra pequena: veja as ressalvas no ADR.
+O gate `recall@5 ≥ 0,90` **não é atingido** na calibração (0,702) e é atingido no holdout
+(0,967). Medições anteriores, mantidas como histórico no
+[ADR 0003](docs/adr/0003-busca-hibrida.md#remedição-de-2026-11-26-e-holdout-c2): 0,798 nas
+mesmas 14 perguntas antes da remedição e 0,896 só nas 8 perguntas originais. Híbrida + rerank não
+foi remedida por instabilidade do reranker (0,479 na medição anterior, 8 perguntas). Amostra
+pequena: veja as ressalvas no ADR.
 
 ### Guardrails
 
@@ -290,9 +298,14 @@ anterior). Amostra pequena: veja as ressalvas no ADR.
   frases legítimas de lojista em
   [tests/security/data/legit_phrases.yaml](tests/security/data/legit_phrases.yaml); taxas da
   heurística, da suíte e do classificador real em
-  [docs/reports/final-review.md](docs/reports/final-review.md). O 0/34 de falso positivo vale
-  **para a suíte do projeto**; o número por conjunto (inclusive as frases do QA independente,
-  que nunca entraram no prompt, e o caso que ainda erra) está em
+  [docs/reports/final-review.md](docs/reports/final-review.md). Falso positivo atual
+  (frases legítimas bloqueadas), por conjunto: **suíte interna 0/34** (pela API), **frases do QA
+  independente 0/96** (32 frases × 3, nunca vistas pelo prompt) e **holdout escrito depois do
+  prompt 0/60** (20 × 3), em
+  [input-guard-probe-2026-11-26.json](docs/reports/data/input-guard-probe-2026-11-26.json).
+  Esses números são nossos: a validação externa definitiva depende de um novo QA independente
+  (o último medido por ele, 2/32, é anterior à mudança do prompt). Caso que ainda erra e
+  histórico em
   [docs/limitations.md §10](docs/limitations.md#10-classificador-de-entrada-casos-que-ainda-erram).
 - Rate limit: 30 mensagens/min por usuário no chat; cadastro e pedido de troca de senha com 5 por
   hora por IP e por e-mail (429 + `Retry-After`).
@@ -382,6 +395,10 @@ bloqueios de guardrail, handoffs e a avaliação online (`getnet_online_eval_sco
 docker compose -f docker-compose.yml -f docker-compose.obs.yml --profile obs up -d --build
 # atalho equivalente: make up-obs
 ```
+
+Prometheus (`127.0.0.1:9090`) e Grafana (`127.0.0.1:3000`) só escutam na própria máquina. O
+Grafana não tem acesso anônimo: o login é `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`, do
+`.env` gerado por `scripts/bootstrap_env.sh` (o container não sobe com a senha vazia).
 
 O `docker-compose.obs.yml` só define `OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318` na api; não é
 preciso mexer no `.env`. Só com `--profile obs` (sem o arquivo) os painéis de métricas funcionam,

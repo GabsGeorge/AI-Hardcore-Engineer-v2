@@ -81,7 +81,7 @@
         <mxCell id="a_es" value="&lt;b&gt;Escalation&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
           <mxGeometry x="1000" y="290" width="120" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="a_kn_t" value="RAG híbrido&lt;br&gt;web_search" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="a_kn_t" value="RAG denso (híbrido opcional)&lt;br&gt;web_search" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="740" y="370" width="120" height="70" as="geometry" />
         </mxCell>
         <mxCell id="a_su_t" value="5 tools tipadas&lt;br&gt;dados mock&lt;br&gt;user_id injetado" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
@@ -120,7 +120,7 @@
         <mxCell id="a_otel" value="OpenTelemetry&lt;br&gt;span por agente/tool/LLM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="420" y="660" width="180" height="50" as="geometry" />
         </mxCell>
-        <mxCell id="a_langfuse" value="Langfuse&lt;br&gt;traces de LLM + evals" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="a_langfuse" value="Grafana Tempo&lt;br&gt;traces OTLP de nó, LLM e tool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="630" y="660" width="180" height="50" as="geometry" />
         </mxCell>
         <mxCell id="a_prom" value="Prometheus&lt;br&gt;métricas + alertas" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
@@ -252,7 +252,7 @@
           <mxGeometry x="700" y="440" width="170" height="60" as="geometry" />
         </mxCell>
 
-        <mxCell id="b_kn_t" value="&lt;b&gt;allowlist Knowledge&lt;/b&gt;&lt;br&gt;hybrid_retrieve (BM25 bm25s + densa → RRF → rerank)&lt;br&gt;web_search (DuckDuckGo, cache)&lt;br&gt;&lt;i&gt;contexto = dado não confiável&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="b_kn_t" value="&lt;b&gt;allowlist Knowledge&lt;/b&gt;&lt;br&gt;search_knowledge_base: densa (pgvector), padrão; híbrida BM25 + RRF + rerank, opcional&lt;br&gt;web_search (DuckDuckGo, cache)&lt;br&gt;&lt;i&gt;contexto = dado não confiável&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="940" y="60" width="280" height="100" as="geometry" />
         </mxCell>
         <mxCell id="b_su_t" value="&lt;b&gt;allowlist Support&lt;/b&gt;&lt;br&gt;get_settlement_schedule&lt;br&gt;diagnose_terminal&lt;br&gt;lookup_decline_code&lt;br&gt;get_recent_transactions&lt;br&gt;get_customer_profile&lt;br&gt;&lt;i&gt;sem user_id no schema · timeout + retry&lt;/i&gt;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="1">
@@ -292,7 +292,7 @@
         <mxCell id="b_e2" value="bloqueado" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;fontSize=10;labelBackgroundColor=#ffffff;strokeColor=#b85450;" edge="1" parent="1" source="b_gin" target="b_safe">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
-        <mxCell id="b_e3" value="ok" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b_gin" target="b_sup">
+        <mxCell id="b_e3" value="ok → summarize (memória)" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;fontSize=10;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="b_gin" target="b_sup">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
         <mxCell id="b_e4" value="Send (paralelo)" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=classic;startArrow=classic;fontSize=10;labelBackgroundColor=#ffffff;exitX=0.5;exitY=0;" edge="1" parent="1" source="b_sup" target="b_kn">
@@ -365,7 +365,7 @@
         <mxCell id="c_i3" value="&lt;b&gt;Extração&lt;/b&gt;&lt;br&gt;HTML e PDF&lt;br&gt;remove boilerplate" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="400" y="100" width="150" height="80" as="geometry" />
         </mxCell>
-        <mxCell id="c_i4" value="&lt;b&gt;Chunking estrutural&lt;/b&gt;&lt;br&gt;por títulos · 400–800 tokens&lt;br&gt;tabelas inteiras" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="c_i4" value="&lt;b&gt;Chunking estrutural&lt;/b&gt;&lt;br&gt;por títulos · 400–800 palavras&lt;br&gt;tabelas inteiras" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="590" y="100" width="170" height="80" as="geometry" />
         </mxCell>
         <mxCell id="c_i5" value="&lt;b&gt;Indexação&lt;/b&gt;&lt;br&gt;embeddings OpenAI&lt;br&gt;(pgvector)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;" vertex="1" parent="1">
@@ -387,16 +387,16 @@
         <mxCell id="c_r2" value="&lt;b&gt;Reescrita&lt;/b&gt;&lt;br&gt;multi-query&lt;br&gt;PT ↔ EN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="210" y="340" width="150" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="c_r3a" value="&lt;b&gt;BM25&lt;/b&gt; top-20&lt;br&gt;bm25s em memória&lt;br&gt;(montado de chunks)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="c_r3a" value="&lt;b&gt;BM25&lt;/b&gt; top-20&lt;br&gt;bm25s em memória&lt;br&gt;(só na híbrida)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="400" y="290" width="150" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="c_r3b" value="&lt;b&gt;Densa&lt;/b&gt; top-20&lt;br&gt;pgvector" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="c_r3b" value="&lt;b&gt;Densa&lt;/b&gt; (padrão)&lt;br&gt;pgvector · corte&lt;br&gt;RAG_DENSE_THRESHOLD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="400" y="400" width="150" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="c_r4" value="&lt;b&gt;RRF&lt;/b&gt;&lt;br&gt;fusão de rankings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="c_r4" value="&lt;b&gt;RRF&lt;/b&gt;&lt;br&gt;fusão de rankings&lt;br&gt;(só na híbrida)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="600" y="340" width="140" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="c_r5" value="&lt;b&gt;Rerank&lt;/b&gt;&lt;br&gt;cross-encoder leve&lt;br&gt;(FlashRank) → top-5" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="c_r5" value="&lt;b&gt;Rerank&lt;/b&gt; (só na híbrida)&lt;br&gt;FlashRank → top-5&lt;br&gt;falhou: volta à densa" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="780" y="340" width="150" height="70" as="geometry" />
         </mxCell>
         <mxCell id="c_r6" value="relevância&lt;br&gt;≥ limiar?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;" vertex="1" parent="1">
@@ -408,7 +408,7 @@
         <mxCell id="c_r8" value="&lt;b&gt;web_search&lt;/b&gt; (DuckDuckGo)&lt;br&gt;ou &quot;não sei&quot; / escalar" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="1130" y="410" width="180" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="c_eval" value="&lt;b&gt;Avaliação&lt;/b&gt; · retrieval: recall@5, MRR, nDCG (densa vs híbrida vs híbrida + rerank) · geração: faithfulness e relevância (RAGAS/DeepEval)" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="1">
+        <mxCell id="c_eval" value="&lt;b&gt;Avaliação&lt;/b&gt; · retrieval: recall@5, MRR, nDCG (densa vs híbrida vs híbrida + rerank) · geração: fidelidade e relevância (juiz em lote, evals/judge_batch.py)" style="shape=note;whiteSpace=wrap;html=1;size=14;fillColor=#fff2cc;strokeColor=#d6b656;align=left;spacingLeft=6;fontSize=11;" vertex="1" parent="1">
           <mxGeometry x="20" y="520" width="900" height="50" as="geometry" />
         </mxCell>
 
