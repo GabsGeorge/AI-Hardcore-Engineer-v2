@@ -7,12 +7,15 @@ responde em até 8 s por LLM + RAG + tools; falhas, dúvidas sensíveis e açõe
 passam por um fluxo de handoff com retomada humana. **Toda operação roda via `docker compose`
 na própria máquina — não há dependência de Python ou `make` no host.**
 
-> **Status**: spec **001** (multi-agent) com 179 de 180 tasks fechadas e spec **002-web-ui** com
-> 98 de 105; as 8 abertas são testes que faltam, listados em
-> [docs/limitations.md](docs/limitations.md) §7. Testes: **686** no backend (pytest: 379 de
-> unidade, 37 de contrato, 146 de integração, 104 de segurança, 20 de repositório/infra; 685
-> passam e 1 é pulado), **98** no frontend (Vitest) e **19** E2E (Playwright contra a stack real). Golden set com LLM real: rota
-> exata **98,3%** de média em 3 passagens (2026-11-26), acima do gate de 95% — causa e números em
+> **Status**: spec **001** (multi-agent) com as 180 tasks fechadas e spec **002-web-ui** com
+> 104 de 105; a aberta (T056, reenvio do fluxo sem duplicar) tem o teste escrito, marcado como
+> falha esperada até a reconexão existir ([docs/limitations.md](docs/limitations.md) §6 e §7).
+> Testes: **767** no backend (pytest: 403 de unidade, 51 de contrato, 186 de integração, 107 de
+> segurança, 20 de repositório/infra; 763 passam, 3 são pulados e 1 é a falha esperada da T056),
+> **102** no frontend (Vitest) e **21** E2E (Playwright contra a stack real, mais 6 visuais
+> pulados por padrão). Os 21 cenários do golden set também rodam no CI, com o modelo roteirizado.
+> Golden set com LLM real: rota exata e fontes em **100%** nas 3 passagens de 2026-11-27, acima do
+> gate de 95% — causa e números em
 > [docs/reports/eval.md](docs/reports/eval.md). Quadros em
 > [specs/001-multi-agent-support/tasks.md](specs/001-multi-agent-support/tasks.md) e
 > [specs/002-web-ui/tasks.md](specs/002-web-ui/tasks.md).
@@ -481,7 +484,7 @@ jornada por perfil em [apps/web/PRODUCT.md](apps/web/PRODUCT.md).
   tracing com Tempo, métricas e dashboards no Grafana, avaliação online, k6, CI com gates
   (lint, tipos, testes, E2E, gitleaks, Trivy).
 - **O que não está entregue ou não atinge a meta**: p95 sob carga acima do SLO (16,5 s / 21,7 s),
-  recall@5 de 0,702 no conjunto de calibração (holdout: 0,967) e testes planejados que não existem — lista completa em
+  recall@5 de 0,702 no conjunto de calibração (holdout: 0,967) e o reenvio do fluxo sem duplicar (T056) — lista completa em
   [docs/limitations.md](docs/limitations.md).
 
 ---
@@ -666,7 +669,7 @@ docker compose -f docker-compose.yml -f docker-compose.test.yml run --rm tests
   legítimas da suíte (0 de 32 do QA independente na sonda); um follow-up com documento diferente
   do turno anterior e sem "meu" ainda pode ser barrado. Libera a pergunta se o LLM falhar
   (fail-open, compensado pela identidade só no token e pelo guardrail de saída).
-- Circuit breaker por processo; alguns testes planejados não existem.
+- Circuit breaker por processo; o reenvio do fluxo do chat sem duplicar (T056) não existe.
 - Latência com o modelo real acima do SLO: com 20 usuários, p95 de 16,5 s (simples) e 21,7 s
   (composto) e média de 9,4 s em 2026-11-27 (antes: 17,8 s / 28,0 s, média 10,5 s; e 25,4 s /
   30,6 s, média 16,1 s, sem o pool de 30 conexões).

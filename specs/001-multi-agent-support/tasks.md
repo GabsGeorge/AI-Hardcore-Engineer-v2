@@ -337,7 +337,7 @@ Ao final, os contratos ficam **congelados**.
 **Purpose**: Consolidar LLM fake em cenários reutilizáveis e fechar a trilha de auditoria.
 **Responsável**: QA + Segurança
 
-- [ ] T126 [P] Criar `tests/integration/scenarios.py` *(auditoria 2026-11-24: não existe; os roteiros ficam inline em `tests/integration/test_golden_scenarios.py`, que roda um subconjunto do golden set, não os 10+8 cenários; ver docs/limitations.md)*: roteiros de fake LLM para os 10 cenários (PT/EN) e os 8 extras, reutilizados por integração e contrato (SC-001, ADR 0006)
+- [x] T126 [P] Criar `tests/integration/scenarios.py` *(2026-11-28: feito — `tests/integration/scenarios.py` tem roteiros para os 21 cenários do golden set (10 do desafio, 8 extras, 3 de crediário); `test_golden_scenarios.py` roda todos pela API e pontua com o mesmo `check()` do eval com modelo real)*: roteiros de fake LLM para os 10 cenários (PT/EN) e os 8 extras, reutilizados por integração e contrato (SC-001, ADR 0006)
 - [X] T127 [P] Escrever `tests/integration/test_golden_scenarios.py`: rota, tools e presença de fontes esperadas nos 18 roteiros (REQ-ORC-01, REQ-API-02)
 - [X] T128 [P] Escrever `tests/security/test_audit.py`: eventos `auth_failed`, `forbidden_user_mismatch`, `tool_call`, `escalated`, `operator_reply`, `action_approved` com ator, ação, alvo, `trace_id`, horário e sem PII (REQ-SEC-07)
 - [X] T129 Completar os pontos de auditoria em `src/app/api/auth.py`, `src/app/api/handoffs.py` e `src/app/agents/escalation.py` (REQ-SEC-07)

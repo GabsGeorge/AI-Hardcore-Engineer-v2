@@ -90,7 +90,8 @@ a quebrar a CI. A lista é curta por desenho.
   `EventSource`; quando o navegador desiste (HTTP 401/403/404/429), o canal fica fechado até o
   lojista recarregar a conversa.
 - **Evolução**: retomar o POST por `trace_id` exigiria guardar o resultado do turno no servidor
-  (o `Idempotency-Key` já faz isso para `/v1/chat`).
+  (o `Idempotency-Key` já faz isso para `/v1/chat`). O teste do comportamento esperado já existe
+  e falha de propósito até lá: `tests/integration/test_chat_stream_mergeback.py` (§7).
 - **Canal aberto depois da resposta do operador** (corrigido em 2026-11-27): o reply retoma o
   grafo (grava a resposta) e só depois resolve o ticket. O canal guardava as respostas que já
   existiam ao abrir e só mandava `final_message` para as novas, então um canal aberto ou reaberto
@@ -123,16 +124,19 @@ a quebrar a CI. A lista é curta por desenho.
   ouvinte por processo que distribui aos canais), mantendo a ordem `final_message` antes de
   `handoff_update`, que hoje vem da leitura em sequência.
 
-## 7. Testes planejados que não existem
+## 7. Testes planejados: um que ainda falha de propósito
 
-A auditoria de 2026-11-24 desmarcou em `specs/*/tasks.md` as tasks cujo teste não existe:
-contrato de `/v1/auth/*` por schemathesis (T036), verificação de e-mail com token usado/expirado
-(T038), listagem de sessões (T039, parcial), "o mesmo link de reset não serve de novo" (T040,
-parcial), métricas/spans de auth (T035), chat E2E com login e api reais fora do HITL (T054,
-parcial) e o arquivo de roteiros dos 10+8 cenários (T126). O comportamento existe no código;
-falta o teste que o prove. O E2E de privacidade (T080) foi feito em 2026-11-26, depois que o QA
-independente mostrou que a tela era um placeholder; a listagem de sessões (T039) ganhou teste de
-integração para o lojista vinculado (QA-060), mas a task continua parcial.
+A auditoria de 2026-11-24 tinha desmarcado em `specs/*/tasks.md` as tasks cujo teste não existia.
+Em 2026-11-28 todas ganharam teste: métricas e spans de auth (T035), contrato de `/v1/auth/*`
+contra `auth.yaml` (T036), verificação de e-mail (T038), listagem de sessões (T039), reset de
+senha (T040), chat E2E com login e api reais (T054) e os roteiros dos 21 cenários do golden set
+(T126). Dois achados viraram correção: o reset gastava o link quando a senha nova era fraca, e o
+contrato não documentava os 422 que a API devolve para corpo inválido.
+
+- **O que fica**: T056 (reenviar o turno depois de o fluxo cair não pode duplicar a mensagem) tem
+  o teste escrito, mas marcado `xfail(strict=True)`, porque a reconexão do POST não existe (§6):
+  hoje o reenvio abre outra conversa. Quando o replay for implementado, o teste passa, o `strict`
+  acusa e a marca sai junto com esta entrada.
 
 ## 8. Golden set: o cenário do Pix (estável desde 2026-11-27)
 

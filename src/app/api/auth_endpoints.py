@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, Response
+from opentelemetry.trace import Span
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.api.auth import CurrentUser
@@ -22,6 +23,7 @@ from app.core.errors import AppError, unauthorized
 from app.db import repo as audit_repo
 from app.db.pool import get_pool
 from app.observability.metrics import AUTH_LOGIN, SESSIONS_ACTIVE
+from app.observability.tracing import span
 from app.ops import mailer
 
 router = APIRouter(prefix="/v1/auth", tags=["auth"])
@@ -197,6 +199,20 @@ async def verify_email(body: VerifyRequest, request: Request) -> GenericOk:
 
 @router.post("/login", response_model=LoginResponse)
 async def login(body: LoginRequest, request: Request, response: Response) -> LoginResponse:
+    """One ``auth.login`` span per attempt (T035) with the outcome, the same label as
+    ``getnet_auth_login_total``; no e-mail or account id on the span."""
+    with span("auth.login") as current:
+        return await _login(body, request, response, current)
+
+
+def _login_outcome(current: Span, outcome: str) -> None:
+    AUTH_LOGIN.labels(outcome).inc()
+    current.set_attribute("auth.outcome", outcome)
+
+
+async def _login(
+    body: LoginRequest, request: Request, response: Response, current: Span
+) -> LoginResponse:
     pool = get_pool()
     redis = request.app.state.redis
     ip = _client_ip(request)
@@ -204,7 +220,7 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Log
 
     gate = await login_rate.before_login(redis, email_lower=email_lower, ip=ip)
     if gate.decision != "allow":
-        AUTH_LOGIN.labels(gate.decision).inc()
+        _login_outcome(current, gate.decision)
         await audit_repo.insert_audit_event(
             pool,
             actor_id="anonymous",
@@ -230,7 +246,7 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Log
             outcome="denied",
             trace_id=getattr(request.state, "trace_id", ""),
         )
-        AUTH_LOGIN.labels("unknown_account").inc()
+        _login_outcome(current, "unknown_account")
         raise AppError(401, "login_failed", "Credenciais inválidas.")
 
     stored = await repo.get_password_hash(pool, account.id)
@@ -245,11 +261,11 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Log
             outcome="denied",
             trace_id=getattr(request.state, "trace_id", ""),
         )
-        AUTH_LOGIN.labels("bad_password").inc()
+        _login_outcome(current, "bad_password")
         raise AppError(401, "login_failed", "Credenciais inválidas.")
 
     if account.status != "active":
-        AUTH_LOGIN.labels(account.status).inc()
+        _login_outcome(current, account.status)
         raise AppError(401, "login_failed", "Credenciais inválidas.")
 
     await login_rate.on_success(redis, email_lower=email_lower, ip=ip)
@@ -259,7 +275,7 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Log
     )
     csrf = csrf_tokens.new_token()
     _set_session_cookies(response, request, token, csrf)
-    AUTH_LOGIN.labels("ok").inc()
+    _login_outcome(current, "ok")
     SESSIONS_ACTIVE.inc()
     await _audit(
         request,
@@ -316,15 +332,20 @@ async def reset_request(body: ResetRequest, request: Request) -> GenericPending:
 
 @router.post("/password/reset", response_model=GenericOk)
 async def reset_confirm(body: ResetConfirm, request: Request) -> GenericOk:
+    # Strength first: a weak password must not spend the link (T040). It used to be consumed
+    # before the check, so a too-short password answered 422 and the merchant needed a new
+    # e-mail. The 422 says nothing about the token. The check is cheap (length + breach list);
+    # the Argon2 hash still runs only after a valid token, so fake tokens cost no hashing.
+    try:
+        passwords.check_strength(body.new_password)
+    except passwords.WeakPasswordError as exc:
+        raise AppError(422, "weak_password", str(exc)) from exc
     account_id = await one_time_tokens.consume(
         get_pool(), token=body.token, purpose="password_reset"
     )
     if account_id is None:
         raise AppError(410, "token_invalid", "Link inválido ou expirado.")
-    try:
-        hashed = passwords.hash_password(body.new_password)
-    except passwords.WeakPasswordError as exc:
-        raise AppError(422, "weak_password", str(exc)) from exc
+    hashed = passwords.hash_password(body.new_password)
     await repo.set_password(get_pool(), account_id, hashed)
     revoked = await sessions.revoke_all(get_pool(), account_id)
     await _audit(
