@@ -9,6 +9,7 @@ import {
   EmptyState,
   FormField,
   Input,
+  LoadError,
   Spinner,
   StatusBadge,
 } from "@/design";
@@ -108,10 +109,17 @@ export function AccountsPage() {
         <Alert tone={toast.kind === "ok" ? "info" : "danger"}>{t(toast.messageKey)}</Alert>
       ) : null}
 
+      {list.isError && list.data !== undefined ? (
+        <LoadError stale onRetry={() => void list.refetch()} retrying={list.isFetching} />
+      ) : null}
+
       {list.isLoading ? (
         <div className="flex items-center gap-2 text-ink-500">
           <Spinner /> <span>{t("app.loading")}</span>
         </div>
+      ) : list.isError && list.data === undefined ? (
+        // A failed load is not "no accounts".
+        <LoadError onRetry={() => void list.refetch()} retrying={list.isFetching} />
       ) : !list.data || list.data.length === 0 ? (
         <EmptyState
           title={t("admin.accounts.emptyTitle")}

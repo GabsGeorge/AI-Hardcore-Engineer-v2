@@ -50,6 +50,7 @@
     "inputPlaceholder": "Pergunte sobre taxas, maquininha, Pix, antecipação…",
     "send": "Enviar",
     "thinking": "Pensando…",
+    "verifying": "Verificando a resposta nas fontes…",
     "sources": "Fontes",
     "rateLimited": "Muitas mensagens em pouco tempo. Aguarde {{seconds}} s antes de enviar de novo.",
     "errors": {
@@ -134,7 +135,6 @@
   },
   "ticket": {
     "title": "Detalhe do chamado",
-    "loading": "Abra o chamado pela fila para carregar o contexto.",
     "summary": "Resumo",
     "pendingAction": "Ação pendente",
     "pendingActionBody": "O lojista pediu uma ação que precisa de decisão do operador: {{type}}.",
@@ -154,7 +154,8 @@
     "noMessages": "Sem mensagens registradas neste chamado.",
     "fromMerchant": "Lojista",
     "fromAssistant": "Assistente",
-    "route": "Rota interna do atendimento"
+    "route": "Rota interna do atendimento",
+    "notInQueue": "Este chamado não está mais na fila. Ele pode ter sido respondido ou encerrado."
   },
   "admin": {
     "home": {
@@ -270,5 +271,20 @@
   "notFound": {
     "title": "Página não encontrada",
     "body": "O endereço que você abriu não existe."
+  },
+  "loadError": {
+    "title": "Não foi possível carregar",
+    "body": "Os dados não chegaram. Confira sua conexão e tente de novo.",
+    "staleTitle": "Não foi possível atualizar",
+    "staleBody": "O que está na tela pode estar desatualizado.",
+    "retry": "Tentar de novo"
+  },
+  "routeError": {
+    "title": "Algo deu errado nesta página",
+    "body": "O erro foi nosso, não seu. Recarregue a página para tentar de novo.",
+    "outdatedTitle": "Há uma versão nova",
+    "outdatedBody": "O sistema foi atualizado enquanto esta aba estava aberta. Recarregue a página para continuar.",
+    "reload": "Recarregar a página",
+    "home": "Voltar ao início"
   }
 }

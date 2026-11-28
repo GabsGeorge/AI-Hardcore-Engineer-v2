@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { Card, EmptyState, Spinner, StatusBadge } from "@/design";
+import { Card, EmptyState, LoadError, Spinner, StatusBadge } from "@/design";
 import { api } from "@/lib/api";
 import type { HandoffRow } from "./types";
 import { merchantLabel } from "./TicketContext";
@@ -26,13 +26,28 @@ export function QueuePage() {
       </div>
     );
   }
+  const retry = () => void query.refetch();
+  // A failed load is not an empty queue: "no tickets waiting" would be a false statement.
+  if (query.isError && query.data === undefined) {
+    return <LoadError onRetry={retry} retrying={query.isFetching} />;
+  }
+  // The 30 s refresh failed but an earlier answer is on screen: keep it and say it may be old.
+  const stale = query.isError ? (
+    <LoadError stale onRetry={retry} retrying={query.isFetching} />
+  ) : null;
   const items = query.data?.items ?? [];
   if (items.length === 0) {
-    return <EmptyState title={t("queue.emptyTitle")} description={t("queue.emptyBody")} />;
+    return (
+      <div className="flex flex-col gap-4">
+        {stale}
+        <EmptyState title={t("queue.emptyTitle")} description={t("queue.emptyBody")} />
+      </div>
+    );
   }
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-display text-ink-900">{t("queue.title")}</h1>
+      {stale}
       <ul className="flex flex-col gap-2">
         {items.map((item) => (
           <li key={item.id}>

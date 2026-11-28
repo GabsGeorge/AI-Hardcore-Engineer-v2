@@ -147,6 +147,16 @@ def _usage(result: Any) -> tuple[Any, dict[str, Any]]:
     return message, dict(getattr(message, "usage_metadata", None) or {})
 
 
+def _with_role(config: Any, role: str) -> Any:
+    """The call's config plus ``metadata.llm_role``. LangGraph hands this metadata to whoever
+    streams the turn (``stream_mode="messages"``), which is how `/v1/chat/stream` knows a chunk
+    is the specialist's answer and not the classifier, the planner or the verifier. The config in
+    context (callbacks, graph metadata) is kept: only the role is added."""
+    from langchain_core.runnables.config import ensure_config, merge_configs
+
+    return merge_configs(ensure_config(config), {"metadata": {"llm_role": role}})
+
+
 class TracedModel:
     """Chat-model proxy that opens one ``llm.<role>`` span per call (REQ-OBS-02).
 
@@ -193,7 +203,9 @@ class TracedModel:
                     set_prompt_version(current, prompt)
             started = time.perf_counter()
             try:
-                result = await self._inner.ainvoke(payload, config, **kwargs)
+                result = await self._inner.ainvoke(
+                    payload, _with_role(config, self._role), **kwargs
+                )
             finally:
                 elapsed = time.perf_counter() - started
                 current.set_attribute("llm.latency_ms", round(elapsed * 1000, 1))

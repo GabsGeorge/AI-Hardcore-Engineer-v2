@@ -16,11 +16,13 @@ from sse_starlette.sse import EventSourceResponse
 from app.api.auth import CurrentUser, current_user
 from app.api.limits import check_rate_limit, idempotency_get_or_claim, idempotency_store
 from app.api.schemas import ChatRequest, ChatResponse, GuardrailsResult, HandoffRef, RouteNode
+from app.api.token_stream import TokenStream
+from app.core.config import get_settings
 from app.core.errors import AppError, forbidden
 from app.db import repo
 from app.db.pool import get_pool
 from app.guardrails.pii import mask
-from app.observability.metrics import CHAT_TURN_LATENCY
+from app.observability.metrics import CHAT_FIRST_TOKEN, CHAT_TURN_LATENCY
 from app.ops.online_eval import schedule_score_turn
 
 router = APIRouter()
@@ -266,7 +268,8 @@ async def chat(
 async def chat_stream(
     body: ChatRequest, request: Request, user: CurrentUser = Depends(current_user)
 ) -> EventSourceResponse:
-    """SSE variant of /v1/chat: agent_step per node, handoff, then done (contracts/events.md)."""
+    """SSE variant of /v1/chat: agent_step per node, the answer text as it is generated (token),
+    handoff, then done with the verified response (contracts/events.md)."""
     trace_id: str = request.state.trace_id
     started = time.perf_counter()
     _require_chat_identity(user)
@@ -280,10 +283,26 @@ async def chat_stream(
 
     async def _generator() -> Any:
         seen: set[str] = set()
-        async for chunk in graph.astream(
-            turn_input(body.message), config=config, stream_mode="updates"
+        # With token streaming on, the turn is also read in "messages" mode: the chunks of every
+        # model call, of which TokenStream forwards only the answer text (masked, held back).
+        tokens = TokenStream() if get_settings().chat_stream_tokens else None
+        modes = ["updates", "messages"] if tokens is not None else ["updates"]
+        async for mode, item in graph.astream(
+            turn_input(body.message), config=config, stream_mode=modes
         ):
-            for node in chunk:
+            if mode == "messages":
+                if tokens is None:
+                    continue
+                first = not tokens.sent_any
+                for event in tokens.feed(*item):
+                    if first and event["event"] == "token":
+                        first = False
+                        CHAT_FIRST_TOKEN.observe(time.perf_counter() - started)
+                    yield {"event": event["event"], "data": json.dumps(event["data"])}
+                continue
+            if tokens is not None:
+                tokens.observe_update(item)
+            for node in item:
                 if node not in seen:
                     seen.add(node)
                     yield {"event": "agent_step", "data": json.dumps({"node": node})}

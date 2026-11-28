@@ -257,10 +257,23 @@ contrato não documentava os 422 que a API devolve para corpo inválido.
   "o Pix PJ é totalmente gratuito", que contradiz a fonte de MDR. `OPENAI_MODEL_CHECKS` fica vazio;
   a opção (inclusive por papel, `OPENAI_MODEL_CHECKS_ROLES`) existe para medir outro candidato.
 - **O que ainda falta**: sob carga cada chamada ao modelo fica mais lenta (1,4 a 2,7 s cada), e
-  o turno ainda tem 4 a 5 em sequência; o p95 segue acima da meta. O próximo passo de maior
-  efeito para o lojista é a resposta aparecer enquanto é gerada (o endpoint `/v1/chat/stream` já
-  existe), mas o texto só pode ser mostrado depois do verificador de saída; mostrar antes exige
-  decidir como tratar uma resposta que o verificador troca depois de exibida.
+  o turno ainda tem 4 a 5 em sequência; o p95 do turno inteiro segue acima da meta.
+- **Resposta na tela enquanto é gerada (2026-11-28)**: `/v1/chat/stream` passou a mandar o texto
+  da resposta em eventos `token` (`src/app/api/token_stream.py`,
+  [contrato](../specs/001-multi-agent-support/contracts/events.md)), e o chat o mostra como
+  rascunho com o aviso "Verificando a resposta nas fontes…". Isso não encurta o turno: muda
+  quando o lojista começa a ler. **Trade-off assumido**: o rascunho aparece antes do guardrail
+  de saída. O que o guardrail faz sem modelo vale também no rascunho (máscara de PII com retenção
+  dos últimos 32 caracteres; promessa financeira interrompe o texto antes de aparecer); a
+  checagem de grounding é uma chamada ao modelo sobre a resposta pronta, então uma resposta sem
+  base pode ser lida por alguns segundos antes de o `done` trocá-la por "não encontrei base".
+  O rascunho nunca fica como resposta: some no `done`, e some se o fluxo cair.
+  `CHAT_STREAM_TOKENS=false` volta ao comportamento anterior.
+- **Não medido com o modelo real**: o tempo até o primeiro texto
+  (`getnet_chat_first_token_seconds`) ainda não foi medido, porque a chave da OpenAI do ambiente
+  expirou em 2026-11-28. Os testes usam um modelo falso que faz streaming de verdade
+  (`tests/fakes.py::StreamingFakeChat`); falta confirmar com o provedor que a saída estruturada do
+  especialista de conhecimento chega em pedaços como o leitor espera, e publicar o número.
 
 ## 12. `X-Real-IP` confiável só atrás do nginx
 

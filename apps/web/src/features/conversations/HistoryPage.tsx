@@ -1,7 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { Card, EmptyState, Spinner, StatusBadge } from "@/design";
+import { Card, EmptyState, LoadError, Spinner, StatusBadge } from "@/design";
 import { api } from "@/lib/api";
 
 type HandoffStatus = "none" | "awaiting_human" | "resolved" | "expired";
@@ -40,6 +40,10 @@ export function HistoryPage() {
     );
   }
 
+  // A failed load is not an empty history: "nothing here yet" would be a false statement.
+  if (query.isError && query.data === undefined) {
+    return <LoadError onRetry={() => void query.refetch()} retrying={query.isFetching} />;
+  }
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   if (items.length === 0) {
     return (
@@ -58,6 +62,9 @@ export function HistoryPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-display text-ink-900">{t("history.title")}</h1>
+      {query.isError && !query.isFetchNextPageError ? (
+        <LoadError stale onRetry={() => void query.refetch()} retrying={query.isFetching} />
+      ) : null}
       <ul className="flex flex-col gap-2">
         {items.map((item) => (
           <li key={item.id}>
@@ -80,7 +87,9 @@ export function HistoryPage() {
           </li>
         ))}
       </ul>
-      {query.hasNextPage ? (
+      {query.isFetchNextPageError ? (
+        <LoadError onRetry={() => void query.fetchNextPage()} retrying={query.isFetchingNextPage} />
+      ) : query.hasNextPage ? (
         <button
           type="button"
           onClick={() => void query.fetchNextPage()}

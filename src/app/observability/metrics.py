@@ -53,6 +53,11 @@ AUTH_EMAIL_ERRORS = Counter(
     "getnet_auth_email_errors_total", "Transactional e-mail errors.", labelnames=("kind",)
 )
 SESSIONS_ACTIVE = Counter("getnet_auth_sessions_opened_total", "Sessions opened via login.")
+CHAT_FIRST_TOKEN = Histogram(
+    "getnet_chat_first_token_seconds",
+    "Time from the request to the first answer text sent on /v1/chat/stream.",
+    buckets=(0.5, 1, 2, 3, 4, 5, 6, 8, 10, 15, 20, 30),
+)
 ONLINE_EVAL_SCORE = Histogram(
     "getnet_online_eval_score",
     "LLM-as-judge: faithfulness e relevance amostrados em produção (0-1).",

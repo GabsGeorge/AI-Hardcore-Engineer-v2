@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from collections import defaultdict, deque
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from typing import Any
 
 from langchain_core.embeddings import DeterministicFakeEmbedding
-from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatGenerationChunk, ChatResult
 from pydantic import BaseModel, ValidationError
 
 DEFAULT_USAGE = {"input_tokens": 100, "output_tokens": 20, "total_tokens": 120}
@@ -173,3 +177,88 @@ def make_plan(
         "language": language,
         "sensitive": sensitive,
     }
+
+
+# --- Streaming fakes -----------------------------------------------------------------------
+# A real LangChain chat model (BaseChatModel) that streams its scripted reply in small pieces,
+# so LangGraph's "messages" stream mode sees chunks exactly as it does with a provider model:
+# plain text in `content`, structured output as the JSON arguments of a tool call.
+
+
+class StreamingFakeChat(BaseChatModel):
+    llm: Any  # the FakeLLM registry the scripts come from
+    role: str
+    tool_name: str | None = None
+    piece: int = 7
+
+    @property
+    def _llm_type(self) -> str:
+        return "streaming-fake"
+
+    def bind_tools(self, tools: Any, **_: Any) -> StreamingFakeChat:
+        schema = tools[0]
+        name = getattr(schema, "__name__", None) or schema.get("title", "tool")
+        return self.model_copy(update={"tool_name": name})
+
+    def _generate(self, *args: Any, **kwargs: Any) -> ChatResult:
+        raise NotImplementedError("the graph only calls the async API")
+
+    def _chunks(self, messages: list[BaseMessage]) -> list[AIMessageChunk]:
+        reply = self.llm.next(self.role, messages)
+        value = reply.value
+        if isinstance(value, Exception):
+            raise value
+        usage: Any = _usage(reply.tokens)
+        if isinstance(value, AIMessage) and value.tool_calls:  # the support tool loop
+            calls: list[Any] = [
+                {"name": c["name"], "args": json.dumps(c["args"]), "id": c["id"], "index": i}
+                for i, c in enumerate(value.tool_calls)
+            ]
+            return [AIMessageChunk(content="", tool_call_chunks=calls, usage_metadata=usage)]
+        if self.tool_name is not None and not isinstance(value, AIMessage):  # structured output
+            if isinstance(value, BaseModel):
+                value = value.model_dump()
+            text = json.dumps(value, ensure_ascii=False)
+            parts = [text[i : i + self.piece] for i in range(0, len(text), self.piece)]
+            out = []
+            for n, part in enumerate(parts):
+                call: Any = {
+                    "name": self.tool_name if n == 0 else None,
+                    "args": part,
+                    "id": "call_0" if n == 0 else None,
+                    "index": 0,
+                }
+                out.append(AIMessageChunk(content="", tool_call_chunks=[call]))
+            out.append(AIMessageChunk(content="", usage_metadata=usage))
+            return out
+        text = str(value.content) if isinstance(value, AIMessage) else str(value)
+        parts = [text[i : i + self.piece] for i in range(0, len(text), self.piece)]
+        out = [AIMessageChunk(content=part) for part in parts]
+        out.append(AIMessageChunk(content="", usage_metadata=usage))
+        return out
+
+    async def _astream(
+        self, messages: list[BaseMessage], stop: Any = None, run_manager: Any = None, **_: Any
+    ) -> AsyncIterator[ChatGenerationChunk]:
+        for message in self._chunks(messages):
+            chunk = ChatGenerationChunk(message=message)
+            if run_manager is not None:
+                await run_manager.on_llm_new_token(str(message.content), chunk=chunk)
+            yield chunk
+
+    async def _agenerate(
+        self, messages: list[BaseMessage], stop: Any = None, run_manager: Any = None, **_: Any
+    ) -> ChatResult:
+        total: AIMessageChunk | None = None
+        for message in self._chunks(messages):
+            total = message if total is None else total + message
+        assert total is not None
+        return ChatResult(generations=[ChatGeneration(message=total)])
+
+
+@dataclass
+class StreamingFakeLLM(FakeLLM):
+    """FakeLLM whose models stream: same scripts, real chunks."""
+
+    def model(self, role: str) -> Any:  # type: ignore[override]
+        return StreamingFakeChat(llm=self, role=role)

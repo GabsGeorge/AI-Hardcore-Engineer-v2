@@ -28,7 +28,8 @@ def get_model(role: str) -> Any:
     if _model_factory is not None:
         return TracedModel(_model_factory(role), role, s.openai_model_primary or "test-double")
     name = model_for(role)
-    return TracedModel(_real_model(ROLE_TEMPERATURE.get(role), name), role, name)
+    streaming = role in STREAM_ROLES
+    return TracedModel(_real_model(ROLE_TEMPERATURE.get(role), name, streaming), role, name)
 
 
 # The short checks around a turn (input classifier, output verifier, search rewrite) can run on
@@ -36,6 +37,13 @@ def get_model(role: str) -> Any:
 # OPENAI_MODEL_CHECKS_ROLES. Empty means the primary model: nothing changes until a candidate has
 # been measured against the guard suites and the golden set.
 CHECK_ROLES = frozenset({"input_guard", "output_guard", "knowledge_rewrite"})
+
+
+# Roles whose text the merchant reads: `/v1/chat/stream` shows it while it is generated
+# (app/api/token_stream.py). Every other role keeps the plain request/response call even when a
+# streaming consumer is attached, so classifiers, planner and verifier behave exactly as in
+# `/v1/chat`.
+STREAM_ROLES = frozenset({"knowledge", "support", "synthesize"})
 
 
 def model_for(role: str) -> str:
@@ -72,8 +80,12 @@ ROLE_TEMPERATURE: dict[str, float] = {
 }
 
 
-def _real_model(temperature: float | None = None, model: str | None = None) -> Any:
-    """Chat model for a role, chained to OPENAI_MODEL_FALLBACK when set (REQ-REL-02)."""
+def _real_model(
+    temperature: float | None = None, model: str | None = None, streaming: bool = False
+) -> Any:
+    """Chat model for a role, chained to OPENAI_MODEL_FALLBACK when set (REQ-REL-02).
+    ``streaming=False`` disables token streaming for the model even under a streaming consumer;
+    ``stream_usage`` keeps the token count (budget, metrics) on streamed calls."""
     s = get_settings()
     name = model or s.openai_model_primary
     extra: dict[str, Any] = {}
@@ -87,6 +99,8 @@ def _real_model(temperature: float | None = None, model: str | None = None) -> A
         timeout=20,
         max_retries=2,
         temperature=temperature,
+        disable_streaming=not streaming,
+        stream_usage=True,
         **extra,
     )
     if s.openai_model_fallback:
@@ -96,6 +110,8 @@ def _real_model(temperature: float | None = None, model: str | None = None) -> A
             timeout=20,
             max_retries=1,
             temperature=None if _is_reasoning_model(s.openai_model_fallback) else temperature,
+            disable_streaming=not streaming,
+            stream_usage=True,
         )
         return primary.with_fallbacks([fallback])
     return primary

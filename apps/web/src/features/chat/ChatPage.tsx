@@ -53,6 +53,9 @@ export function ChatPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pending, setPending] = useState(false);
   const [liveSteps, setLiveSteps] = useState<string[]>([]);
+  // Texto da resposta enquanto é gerada (eventos `token`). É um rascunho: o servidor ainda não
+  // passou o verificador de saída; a resposta que vale é a do evento `done`, que o substitui.
+  const [draft, setDraft] = useState("");
   const [handoff, setHandoff] = useState<HandoffRef>({ status: "none", ticket_id: null });
   const [conversationId, setConversationId] = useState<string | undefined>(params.id);
   const [retryAt, setRetryAt] = useState<number | undefined>(undefined);
@@ -103,7 +106,7 @@ export function ChatPage() {
   // Resolve o P1 do e2e-register-flow: o composer sumia abaixo do viewport.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [messages, liveSteps, pending]);
+  }, [messages, liveSteps, pending, draft]);
 
   // Hidrata a conversa ao abrir pela URL /chat/:id. Resolve o P0 "conversa abre vazia"
   // do e2e-register-flow (T020). Troca de id (nav entre conversas) tambem rehidrata.
@@ -163,6 +166,7 @@ export function ChatPage() {
       setMessages((previous) => [...previous, userMessage]);
       setPending(true);
       setLiveSteps([]);
+      setDraft("");
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -184,11 +188,18 @@ export function ChatPage() {
               if (name === "agent_step") {
                 const node = (data as { node?: string }).node ?? "";
                 setLiveSteps((steps) => (steps.includes(node) ? steps : [...steps, node]));
+              } else if (name === "token") {
+                const piece = (data as { text?: string }).text ?? "";
+                setDraft((previous) => previous + piece);
+              } else if (name === "token_reset") {
+                // O servidor recomeçou a resposta (replanejou): o que estava na tela não vale.
+                setDraft("");
               } else if (name === "handoff") {
                 const payload = data as HandoffRef;
                 setHandoff(payload);
               } else if (name === "done") {
                 completed = true;
+                setDraft("");
                 const final = data as ChatResponseBody;
                 setConversationId(final.conversation_id);
                 setHandoff(final.handoff);
@@ -218,6 +229,7 @@ export function ChatPage() {
             onError: () => {
               setPending(false);
               setLiveSteps([]);
+              setDraft("");
             },
             onDone: () => {
               setPending(false);
@@ -226,11 +238,14 @@ export function ChatPage() {
           controller.signal,
         );
         if (!completed && !controller.signal.aborted) {
+          // Fluxo cortado no meio: o rascunho não foi verificado e não pode ficar como resposta.
+          setDraft("");
           showError("chat.errors.interrupted");
         }
       } catch (err) {
         setPending(false);
         setLiveSteps([]);
+        setDraft("");
         if (controller.signal.aborted) {
           return;
         }
@@ -288,7 +303,7 @@ export function ChatPage() {
   return (
     <div className="flex flex-col gap-6">
       <HandoffBanner handoff={handoff} slaBreached={slaBreached} />
-      <MessageList messages={messages} pending={pending} liveSteps={liveSteps} />
+      <MessageList messages={messages} pending={pending} liveSteps={liveSteps} draft={draft} />
       <form
         onSubmit={onSubmit}
         className="sticky bottom-0 flex items-end gap-2 border-t border-line bg-surface-100 pb-2 pt-4"
