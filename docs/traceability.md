@@ -10,11 +10,11 @@ Gerado por `scripts/check_traceability.py` (REQ-INF-04).
 | REQ-API-04 | T016, T031 | tests/integration/test_health.py | ✅ |
 | REQ-API-05 | T112 | tests/integration/test_hitl.py, tests/integration/test_me_conversations_isolation.py | ✅ |
 | REQ-API-06 | T137, T142 | tests/contract/test_idempotency.py | ✅ |
-| REQ-API-07 | T160, T166 | tests/contract/test_stream.py, tests/integration/test_chat_stream_mergeback.py, tests/integration/test_conversation_events_hitl.py, tests/unit/test_conversation_events.py | ✅ |
+| REQ-API-07 | T160, T166 | tests/contract/test_stream.py, tests/contract/test_stream_tokens.py, tests/integration/test_chat_stream_mergeback.py, tests/integration/test_conversation_events_hitl.py, tests/unit/test_conversation_events.py, tests/unit/test_token_stream.py | ✅ |
 | REQ-GR-01 | T114, T119, T121 | tests/security/test_injection_direct.py, tests/security/test_injection_identity.py, tests/unit/test_input_guard_decision.py, tests/unit/test_input_guardrail_false_positives.py, tests/unit/test_input_guardrail_idor.py, tests/unit/test_parallel_plan.py | ✅ |
 | REQ-GR-02 | T010, T011, T022, T025, T039, T050, T053, T085 | tests/integration/test_chat_flow.py, tests/integration/test_graph_topology.py, tests/security/test_pii.py, tests/security/test_security_idor.py, tests/unit/test_logging.py, tests/unit/test_pii.py, tests/unit/test_pii_placeholders.py | ✅ |
 | REQ-GR-03 | T116, T119 | tests/integration/test_out_of_scope.py | ✅ |
-| REQ-GR-04 | T117, T120, T121 | tests/unit/test_evidence_numbering.py, tests/unit/test_output_guardrail.py, tests/unit/test_output_guardrail_context.py, tests/unit/test_output_guardrail_negatives.py, tests/unit/test_support_empty_results.py | ✅ |
+| REQ-GR-04 | T117, T120, T121 | tests/unit/test_evidence_numbering.py, tests/unit/test_output_guardrail.py, tests/unit/test_output_guardrail_context.py, tests/unit/test_output_guardrail_negatives.py, tests/unit/test_support_empty_results.py, tests/unit/test_token_stream.py | ✅ |
 | REQ-GR-05 | T082, T115, T121 | tests/integration/test_graph_paths.py, tests/integration/test_knowledge.py, tests/security/test_chat_render.py, tests/security/test_injection_indirect.py | ✅ |
 | REQ-HITL-01 | T108 | tests/integration/test_graph_escalation_route.py, tests/integration/test_hitl.py, tests/unit/test_ticket_context.py | ✅ |
 | REQ-HITL-02 | T100, T106, T108, T109 | tests/integration/test_hitl.py | ✅ |

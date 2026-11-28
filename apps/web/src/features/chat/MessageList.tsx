@@ -12,10 +12,13 @@ export function MessageList({
   messages,
   pending,
   liveSteps,
+  draft = "",
 }: {
   messages: ChatMessage[];
   pending: boolean;
   liveSteps: string[];
+  /** Resposta em geração, ainda não verificada pelo servidor (eventos `token`). */
+  draft?: string;
 }) {
   const { t } = useTranslation();
   return (
@@ -60,10 +63,29 @@ export function MessageList({
                 ))}
               </div>
             ) : null}
-            <div className="flex max-w-[80%] items-center gap-2 rounded-lg border border-line bg-surface-100 p-3 text-body text-ink-500 shadow-1">
-              <Spinner />
-              <span>{t("chat.thinking")}</span>
-            </div>
+            {draft ? (
+              // Rascunho: o texto aparece enquanto é gerado, com o aviso de que ainda está sendo
+              // verificado. Fica fora da leitura de tela (aria-hidden): quem usa leitor ouve a
+              // resposta final uma vez, anunciada quando chega, e não cada pedaço.
+              <>
+                <div
+                  aria-hidden="true"
+                  data-testid="draft"
+                  className="max-w-[80%] break-words rounded-lg border border-dashed border-line bg-surface-100 p-3 text-body text-ink-700 [overflow-wrap:anywhere]"
+                >
+                  <MessageContent text={draft} />
+                </div>
+                <div className="flex items-center gap-2 text-label text-ink-500">
+                  <Spinner />
+                  <span>{t("chat.verifying")}</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex max-w-[80%] items-center gap-2 rounded-lg border border-line bg-surface-100 p-3 text-body text-ink-500 shadow-1">
+                <Spinner />
+                <span>{t("chat.thinking")}</span>
+              </div>
+            )}
           </li>
         ) : null}
       </ol>

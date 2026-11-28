@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import i18n from "i18next";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -101,7 +101,10 @@ describe("ChatPage: resposta do atendente em tempo real (FR-010, T065)", () => {
       source.emit("final_message", { content: "Resposta antiga do assistente" }, "final_message:1"),
     );
     expect(await screen.findByText(/^respondido$/i)).toBeInTheDocument();
-    expect(screen.getAllByText("Resposta antiga do assistente")).toHaveLength(1);
+    // Só a lista de mensagens: o anúncio para leitor de tela (aria-live) repete o texto fora
+    // dela um frame depois, e contar na página inteira dava 1 ou 2 conforme o momento.
+    const log = within(screen.getByRole("log"));
+    expect(log.getAllByText("Resposta antiga do assistente")).toHaveLength(1);
     await waitFor(() => expect(composer()).toBeEnabled());
   });
 

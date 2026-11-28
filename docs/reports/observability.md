@@ -124,6 +124,7 @@ O Prometheus também só escuta em `127.0.0.1:9090`.
 | `getnet_http_requests_total` | counter | `route`, `method`, `status` | middleware `trace_requests` (`main.py`) |
 | `getnet_http_request_duration_seconds` | histogram | `route` | idem (em `/v1/chat/stream` mede só até o início do fluxo) |
 | `getnet_chat_turn_duration_seconds` | histogram | `endpoint` (`/v1/chat`, `/v1/chat/stream`) | `api/chat.py`, do pedido à resposta final; base dos painéis de latência e do alerta (QA-078) |
+| `getnet_chat_first_token_seconds` | histogram | — | `api/chat.py`, do pedido ao primeiro evento `token` de `/v1/chat/stream`: quando o lojista começa a ler a resposta |
 | `getnet_route_total` | counter | `node` | `_dispatch` do supervisor |
 | `getnet_tokens_total` | counter | `role` | `TracedModel` (toda chamada de LLM) |
 | `getnet_tool_errors_total` | counter | `tool` | `call_tool` quando o status não é `ok` |

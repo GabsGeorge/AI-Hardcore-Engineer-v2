@@ -72,6 +72,12 @@ _FINANCIAL_PROMISE = re.compile(
 )
 
 
+def has_financial_promise(text: str) -> bool:
+    """The reply commits the system to a refund, chargeback or fee change (REQ-GR-04). Also used
+    on the answer while it streams (app/api/token_stream.py), to stop before the promise shows."""
+    return _FINANCIAL_PROMISE.search(text) is not None
+
+
 # A negative capability claim about the company itself ("A Getnet não aceita X", "Getnet does not
 # offer X"). Silence in the sources does not prove it, and an LLM grounding check lets it through
 # now and then, so this one is enforced deterministically: the passages must contain the same
