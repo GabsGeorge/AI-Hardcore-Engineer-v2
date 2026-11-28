@@ -37,7 +37,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await checkpointer.setup()
     app.state.graph = build_graph(checkpointer)
     app.state.redis = Redis.from_url(settings.redis_url)
-    app.state.scheduler_task = await start_scheduler(pool, app.state.graph)
+    app.state.scheduler_task = (
+        await start_scheduler(pool, app.state.graph) if settings.scheduler_enabled else None
+    )
     # Aquece o cross-encoder em background APENAS quando SKIP_RERANKER nao esta setado.
     # Em maquinas apertadas (ex.: 8GB RAM) o FlashRank + numpy inflam a api para alem do
     # mem_limit e o kernel mata o container (OOM 137). SKIP_RERANKER=1 deixa o retriever
@@ -64,9 +66,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        app.state.scheduler_task.cancel()
-        with contextlib.suppress(asyncio.CancelledError, Exception):
-            await app.state.scheduler_task
+        if app.state.scheduler_task is not None:
+            app.state.scheduler_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await app.state.scheduler_task
         await app.state.redis.aclose()
         await close_pool()
 
