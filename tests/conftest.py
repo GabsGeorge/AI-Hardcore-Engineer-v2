@@ -16,6 +16,10 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("SEED_REFERENCE_DATE", "2026-10-13")
 os.environ.setdefault("METRICS_PORT", "0")  # no exporter thread in tests; read the registry
 os.environ.setdefault("EVAL_SAMPLE_RATE", "0")  # no background judge calls in tests
+# No periodic scheduler: its first tick (with the retention purge between 00:00 and 00:15 UTC)
+# ran while the db_pool fixture TRUNCATEd the same tables, and Postgres aborted one of them
+# with a deadlock (CI run 46086014672). tests/integration/test_sla.py calls run_tick itself.
+os.environ.setdefault("SCHEDULER_ENABLED", "0")
 os.environ.setdefault("SESSION_SECRET", secrets.token_hex(32))
 os.environ.setdefault("PASSWORD_PEPPER", secrets.token_hex(32))
 os.environ.setdefault("SMTP_URL", "smtp://mailpit:1025")  # mocked in unit tests

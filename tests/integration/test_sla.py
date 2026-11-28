@@ -167,3 +167,15 @@ async def test_retention_sweep_also_purges_checkpointed_messages(
         )
     await run_tick(db_pool, with_retention=True)
     assert await _checkpoint_rows(db_pool, thread_id) == 0
+
+
+def test_the_periodic_scheduler_is_off_in_the_test_suite(app: FastAPI) -> None:
+    """The suite drives run_tick itself; a background tick racing the per-test TRUNCATE
+    deadlocked Postgres (CI run 46086014672, at 00:06 UTC, inside the retention window)."""
+    assert app.state.scheduler_task is None
+
+
+def test_the_periodic_scheduler_is_on_by_default() -> None:
+    from app.core.config import Settings
+
+    assert Settings.model_fields["scheduler_enabled"].default is True

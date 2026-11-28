@@ -80,6 +80,9 @@ class Settings(BaseSettings):
     ingest_refresh: bool = False
     otel_exporter_otlp_endpoint: str = ""
     metrics_port: int = Field(9100, ge=0)  # internal only; 0 disables the exporter
+    # Periodic SLA / expiry / retention tick (app/ops/scheduler.py). The test suite turns it off
+    # and calls run_tick directly: a tick racing the per-test TRUNCATE deadlocked Postgres.
+    scheduler_enabled: bool = True
 
     seed_reference_date: date | None = None
 
