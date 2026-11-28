@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { Button, Card, Spinner } from "@/design";
+import { Button, Card, LoadError, Spinner } from "@/design";
 import { api } from "@/lib/api";
 
 type Overview = {
@@ -25,17 +25,24 @@ export function QueueOverviewPage() {
       </div>
     );
   }
-  const d = query.data ?? { awaiting_human: 0, sla_breached_today: 0, expired_today: 0 };
+  const d = query.data;
+  const retry = () => void query.refetch();
   return (
     <section className="flex flex-col gap-4">
       <header>
         <h1 className="text-display text-ink-900">{t("admin.queueOverview.title")}</h1>
       </header>
-      <div className="grid gap-4 sm:grid-cols-3">
-        <Tile label={t("admin.queueOverview.awaiting")} value={d.awaiting_human} />
-        <Tile label={t("admin.queueOverview.slaBreached")} value={d.sla_breached_today} />
-        <Tile label={t("admin.queueOverview.expired")} value={d.expired_today} />
-      </div>
+      {/* No numbers without an answer: three zeros would read as "the queue is clear". */}
+      {query.isError ? (
+        <LoadError stale={d !== undefined} onRetry={retry} retrying={query.isFetching} />
+      ) : null}
+      {d !== undefined ? (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Tile label={t("admin.queueOverview.awaiting")} value={d.awaiting_human} />
+          <Tile label={t("admin.queueOverview.slaBreached")} value={d.sla_breached_today} />
+          <Tile label={t("admin.queueOverview.expired")} value={d.expired_today} />
+        </div>
+      ) : null}
       <div>
         <Link to="/queue">
           <Button intent="secondary">{t("admin.queueOverview.goToQueue")}</Button>

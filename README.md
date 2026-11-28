@@ -12,7 +12,7 @@ na própria máquina — não há dependência de Python ou `make` no host.**
 > falha esperada até a reconexão existir ([docs/limitations.md](docs/limitations.md) §6 e §7).
 > Testes: **794** no backend (pytest: 423 de unidade, 58 de contrato, 186 de integração, 107 de
 > segurança, 20 de repositório/infra; 790 passam, 3 são pulados e 1 é a falha esperada da T056),
-> **106** no frontend (Vitest) e **22** E2E (Playwright contra a stack real, mais 6 visuais
+> **135** no frontend (Vitest) e **26** E2E (Playwright contra a stack real, mais 6 visuais
 > pulados por padrão). Os 21 cenários do golden set também rodam no CI, com o modelo roteirizado.
 > Golden set com LLM real: rota exata e fontes em **100%** nas 3 passagens de 2026-11-27, acima do
 > gate de 95% — causa e números em

@@ -1,7 +1,16 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Card, EmptyState, FormField, Input, Spinner, StatusBadge } from "@/design";
+import {
+  Button,
+  Card,
+  EmptyState,
+  FormField,
+  Input,
+  LoadError,
+  Spinner,
+  StatusBadge,
+} from "@/design";
 import { api } from "@/lib/api";
 
 const PAGE_SIZE = 50;
@@ -80,10 +89,16 @@ export function AuditPage() {
         <div className="flex items-center gap-2 text-ink-500">
           <Spinner /> <span>{t("app.loading")}</span>
         </div>
+      ) : query.isError && query.data === undefined ? (
+        // A failed load is not "no events": an audit trail must not look empty by accident.
+        <LoadError onRetry={() => void query.refetch()} retrying={query.isFetching} />
       ) : rows.length === 0 ? (
         <EmptyState title={t("admin.audit.emptyTitle")} description={t("admin.audit.emptyBody")} />
       ) : (
         <>
+          {query.isError && !query.isFetchNextPageError ? (
+            <LoadError stale onRetry={() => void query.refetch()} retrying={query.isFetching} />
+          ) : null}
           {/* Below 640 px one card per event: the five columns did not fit (QA-065). */}
           <ul className="flex flex-col gap-2 sm:hidden">
             {rows.map((row) => (
@@ -138,7 +153,12 @@ export function AuditPage() {
               </tbody>
             </table>
           </div>
-          {query.hasNextPage ? (
+          {query.isFetchNextPageError ? (
+            <LoadError
+              onRetry={() => void query.fetchNextPage()}
+              retrying={query.isFetchingNextPage}
+            />
+          ) : query.hasNextPage ? (
             <div>
               <Button
                 intent="secondary"

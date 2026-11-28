@@ -173,6 +173,27 @@ One row = one ticket. Columns: priority chip (`high`/`normal`), reason label, SL
 summary (truncated at 80 chars), merchant mask. Hover reveals a "abrir" button that is
 focusable from the keyboard without hover.
 
+### Load error
+
+A load that failed never looks like an empty result. Every screen that reads from the API has
+three distinct states besides the content: loading (spinner), empty (`EmptyState`) and failed
+(`LoadError`).
+
+- Nothing could be loaded — `danger` alert (`role="alert"`) naming the problem and the
+  recovery, with a "tentar de novo" button. The empty-state copy and any numbers stay off
+  screen: "nenhum chamado" or three zeros would be a false statement.
+- A refresh failed with an earlier answer on screen — the content stays, under a `warning`
+  alert (`role="status"`) saying it may be out of date.
+- The session ended (401) — no alert: back to the login with the "sua sessão expirou" notice,
+  returning to the same page after sign-in.
+
+### Page error
+
+A page that throws while rendering, or whose file fails to load after a deploy, shows the
+product's own screen (`RouteError`): what happened, a "recarregar a página" button and a link
+to the start. Inside the signed-in area the header and navigation stay in place. The error
+detail is never printed on screen.
+
 ## 5. Accessibility floor
 
 - Every interactive element has a visible, 3:1 contrast focus ring (see Focus token).

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Alert, Button, Card, FormField, Input } from "@/design";
+import { Alert, Button, Card, FormField, Input, LoadError } from "@/design";
 import { api, isApiError } from "@/lib/api";
 
 type Account = {
@@ -64,6 +64,15 @@ export function MerchantLinkPage() {
 
       {toast ? (
         <Alert tone={toast.kind === "ok" ? "info" : "danger"}>{t(toast.messageKey)}</Alert>
+      ) : null}
+
+      {/* Without the accounts the list below is empty, and it must not look like "no accounts". */}
+      {accounts.isError ? (
+        <LoadError
+          stale={accounts.data !== undefined}
+          onRetry={() => void accounts.refetch()}
+          retrying={accounts.isFetching}
+        />
       ) : null}
 
       <Card className="flex flex-col gap-3">

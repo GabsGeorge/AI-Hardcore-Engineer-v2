@@ -5,6 +5,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { Alert, Button, FormField, Input, Logo, PasswordInput } from "@/design";
 import { api, isApiError } from "@/lib/api";
+import { SESSION_EXPIRED_KEY } from "@/app/queryClient";
 import { homeFor } from "@/app/session";
 
 const Schema = z.object({
@@ -30,6 +31,7 @@ export function LoginPage() {
   const mutation = useMutation({
     mutationFn: async (body: LoginBody) => api.post<{ account: Account }>("/v1/auth/login", body),
     onSuccess: ({ account }) => {
+      client.removeQueries({ queryKey: SESSION_EXPIRED_KEY });
       client.setQueryData(["session"], account);
       navigate(next ?? homeFor(account.role), { replace: true });
     },

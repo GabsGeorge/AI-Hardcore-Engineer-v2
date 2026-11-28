@@ -10,6 +10,7 @@ export { FormField } from "./FormField";
 export { Input } from "./Input";
 export { Label } from "./Label";
 export { LiveRegion, useLiveAnnouncer } from "./LiveRegion";
+export { LoadError } from "./LoadError";
 export { Logo } from "./Logo";
 export { PasswordInput } from "./PasswordInput";
 export { Spinner } from "./Spinner";

@@ -2,7 +2,18 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useParams } from "react-router-dom";
-import { Alert, Button, Card, FormField, Input, Label, StatusBadge, useToast } from "@/design";
+import {
+  Alert,
+  Button,
+  Card,
+  FormField,
+  Input,
+  Label,
+  LoadError,
+  Spinner,
+  StatusBadge,
+  useToast,
+} from "@/design";
 import { api, isApiError } from "@/lib/api";
 import { TicketContext } from "./TicketContext";
 import type { HandoffRow } from "./types";
@@ -59,8 +70,19 @@ export function TicketPage() {
     },
   });
 
+  if (list.isLoading) {
+    return (
+      <div className="flex items-center gap-2 text-ink-500">
+        <Spinner /> <span>{t("app.loading")}</span>
+      </div>
+    );
+  }
+  if (list.isError && list.data === undefined) {
+    return <LoadError onRetry={() => void list.refetch()} retrying={list.isFetching} />;
+  }
   if (ticket === undefined) {
-    return <Alert tone="info">{t("ticket.loading")}</Alert>;
+    // The queue loaded and this ticket is not in it: answered, closed, or a wrong address.
+    return <Alert tone="info">{t("ticket.notInQueue")}</Alert>;
   }
 
   const requiresDecision = ticket.pending_action !== null;

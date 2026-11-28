@@ -135,7 +135,6 @@
   },
   "ticket": {
     "title": "Ticket detail",
-    "loading": "Open the ticket from the queue to load its context.",
     "summary": "Summary",
     "pendingAction": "Pending action",
     "pendingActionBody": "The merchant asked for an action that needs operator approval: {{type}}.",
@@ -155,7 +154,8 @@
     "noMessages": "No messages recorded for this ticket.",
     "fromMerchant": "Merchant",
     "fromAssistant": "Assistant",
-    "route": "Internal support route"
+    "route": "Internal support route",
+    "notInQueue": "This ticket is no longer in the queue. It may have been answered or closed."
   },
   "admin": {
     "home": {
@@ -271,5 +271,20 @@
   "notFound": {
     "title": "Page not found",
     "body": "The address you opened does not exist."
+  },
+  "loadError": {
+    "title": "Could not load",
+    "body": "The data did not arrive. Check your connection and try again.",
+    "staleTitle": "Could not refresh",
+    "staleBody": "What is on screen may be out of date.",
+    "retry": "Try again"
+  },
+  "routeError": {
+    "title": "Something went wrong on this page",
+    "body": "The error was ours, not yours. Reload the page to try again.",
+    "outdatedTitle": "There is a new version",
+    "outdatedBody": "The system was updated while this tab was open. Reload the page to continue.",
+    "reload": "Reload the page",
+    "home": "Back to the start"
   }
 }

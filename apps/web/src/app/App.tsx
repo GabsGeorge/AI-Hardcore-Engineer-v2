@@ -1,18 +1,12 @@
 import { Suspense, useEffect, useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "react-router-dom";
 import { LiveRegion, Spinner, ToastProvider } from "@/design";
 import { initI18n } from "@/lib/i18n";
+import { createQueryClient } from "./queryClient";
 import { router } from "./routes";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-      refetchOnWindowFocus: false,
-    },
-  },
-});
+const queryClient = createQueryClient();
 
 export default function App() {
   const [ready, setReady] = useState(false);
