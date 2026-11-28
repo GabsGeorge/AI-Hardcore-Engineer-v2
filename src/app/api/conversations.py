@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 from collections import defaultdict
+from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
@@ -45,6 +46,42 @@ async def _release_sse_slot(user_id: str) -> None:
             _sse_connections.pop(user_id, None)
         else:
             _sse_connections[user_id] = remaining
+
+
+@dataclass(frozen=True)
+class _ChannelState:
+    """What the events channel reads from the checkpoint on each cycle."""
+
+    ai: list[AIMessage]
+    escalation: dict[str, Any]
+
+
+def _final_message(snapshot: _ChannelState) -> dict[str, str]:
+    """The latest answer. The id is the answer count, so the same answer sent again by a
+    reopened channel keeps its id and the client drops the repeat (`openGetStream`)."""
+    return {
+        "event": "final_message",
+        "id": f"final_message:{len(snapshot.ai)}",
+        "data": json.dumps({"content": str(snapshot.ai[-1].content)}),
+    }
+
+
+def _reply_catch_up(snapshot: _ChannelState, ticket: str | None) -> bool:
+    """True when the latest answer is the operator's reply to `ticket`, so the channel must send
+    it although the answer count did not grow since the channel opened.
+
+    The reply endpoint resumes the graph (which writes the reply) and only then resolves the
+    ticket. A channel opened between the two, or after both, has the reply in its baseline: it
+    used to send only `handoff_update: resolved`, or nothing, and the reply never reached the
+    merchant. `turn_input` resets `escalation` at the start of every turn, so it names this
+    ticket as resolved only while the resumed turn is still the conversation's latest one: a
+    later, unrelated answer is never sent as the operator's reply."""
+    return (
+        bool(snapshot.ai)
+        and ticket is not None
+        and snapshot.escalation.get("ticket_id") == ticket
+        and snapshot.escalation.get("status") == "resolved"
+    )
 
 
 @router.get("/v1/conversations/{conversation_id}", response_model=Conversation)
@@ -112,23 +149,32 @@ async def conversation_events(
     graph = request.app.state.graph
     config = graph_config(user.id, conversation_id, request.state.trace_id)
 
-    async def _ai_messages() -> list[AIMessage] | None:
+    async def _snapshot() -> _ChannelState | None:
         if graph is None:
             return None
         try:
             state = await graph.aget_state(config)
         except Exception:  # noqa: BLE001 — leitura best-effort; o próximo ciclo tenta de novo
             return None
-        return [m for m in (state.values or {}).get("messages") or [] if isinstance(m, AIMessage)]
+        values: dict[str, Any] = state.values or {}
+        return _ChannelState(
+            ai=[m for m in values.get("messages") or [] if isinstance(m, AIMessage)],
+            escalation=values.get("escalation") or {},
+        )
 
     async def _generator() -> Any:
         """Cada evento leva um `id` estável, para o cliente descartar repetições quando o
         EventSource reconecta (o canal fecha a cada ~60 s e o navegador reabre sozinho)."""
-        last_status: str | None = row.get("handoff_status")
+        opened_status: str | None = row.get("handoff_status")
+        # Canal aberto com o ticket já `resolved` chegou atrasado: o cliente só escuta em
+        # `awaiting_human` e perdeu a transição. Sem status "anterior", o primeiro ciclo trata
+        # o `resolved` como novo e entrega a resposta e o status (ver `_reply_catch_up`).
+        last_status: str | None = None if opened_status == "resolved" else opened_status
         # Só mensagens NOVAS desde a abertura do canal: as respostas que a conversa já tinha
         # não podem voltar como se fossem a resposta do atendente.
-        baseline = await _ai_messages()
-        last_ai_count = len(baseline) if baseline is not None else 0
+        baseline = await _snapshot()
+        last_ai_count = len(baseline.ai) if baseline is not None else 0
+        replied_ticket: str | None = None  # ticket whose reply this channel already sent
         last_sla_announced: str | None = None  # ticket_id whose SLA breach we already told
         last_expired_announced: str | None = None
         try:
@@ -137,23 +183,31 @@ async def conversation_events(
                 info = await repo.get_conversation_handoff(get_pool(), user.id, conversation_id)
                 if info is None:
                     return
+                # Postgres returns the ticket id as a UUID; json.dumps cannot encode it, and
+                # the TypeError ended the stream right after final_message (QA-023).
+                ticket = str(info["ticket_id"]) if info.get("ticket_id") else None
+                current_status = info.get("handoff_status")
+                # Lida DEPOIS do status: o reply grava a mensagem antes de resolver o ticket,
+                # então um `resolved` lido acima garante que a resposta já está aqui.
+                snapshot = await _snapshot()
                 # final_message ANTES de handoff_update: o reply do operador grava a mensagem e
                 # depois resolve o ticket; se o cliente visse `resolved` primeiro, fecharia o
                 # canal antes de receber a resposta.
-                ai_messages = await _ai_messages()
-                if ai_messages is not None and len(ai_messages) > last_ai_count:
-                    last_ai_count = len(ai_messages)
-                    yield {
-                        "event": "final_message",
-                        "id": f"final_message:{last_ai_count}",
-                        "data": json.dumps({"content": str(ai_messages[-1].content)}),
-                    }
-                current_status = info.get("handoff_status")
+                if snapshot is not None and len(snapshot.ai) > last_ai_count:
+                    last_ai_count = len(snapshot.ai)
+                    replied_ticket = ticket
+                    yield _final_message(snapshot)
                 if current_status != last_status:
+                    if current_status == "resolved" and replied_ticket != ticket:
+                        if snapshot is None and graph is not None:
+                            # Sem ler a conversa não dá para mandar a resposta antes do status:
+                            # segura o `resolved` e tenta de novo no próximo ciclo.
+                            continue
+                        if snapshot is not None and _reply_catch_up(snapshot, ticket):
+                            last_ai_count = len(snapshot.ai)
+                            replied_ticket = ticket
+                            yield _final_message(snapshot)
                     last_status = current_status
-                    # Postgres returns the ticket id as a UUID; json.dumps cannot encode it, and
-                    # the TypeError ended the stream right after final_message (QA-023).
-                    ticket = str(info["ticket_id"]) if info.get("ticket_id") else None
                     yield {
                         "event": "handoff_update",
                         "id": f"handoff_update:{ticket}:{current_status or 'none'}",

@@ -64,17 +64,26 @@ export function ChatPage() {
   // canal de eventos traz a resposta, a mudança de status, o SLA estourado e a expiração.
   useConversationEvents(conversationId, handoff.status, {
     onFinalMessage: (content) => {
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: `f-${Date.now()}`,
-          role: "assistant",
-          content,
-          agentSteps: [],
-          sources: [],
-          traceId: "",
-        },
-      ]);
+      setMessages((previous) => {
+        // A página pode ter carregado a conversa entre a gravação da resposta e o fechamento
+        // do ticket: o GET já trouxe a resposta e o canal, que agora sempre a entrega antes do
+        // `resolved`, manda de novo. Não repete a mesma bolha.
+        const last = previous[previous.length - 1];
+        if (last?.role === "assistant" && last.content === content) {
+          return previous;
+        }
+        return [
+          ...previous,
+          {
+            id: `f-${Date.now()}`,
+            role: "assistant",
+            content,
+            agentSteps: [],
+            sources: [],
+            traceId: "",
+          },
+        ];
+      });
       announce(content);
       setHandoff((current) => ({ ...current, status: "resolved" }));
       setSlaBreached(false);

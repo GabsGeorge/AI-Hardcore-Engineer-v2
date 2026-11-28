@@ -91,6 +91,29 @@ a quebrar a CI. A lista é curta por desenho.
   lojista recarregar a conversa.
 - **Evolução**: retomar o POST por `trace_id` exigiria guardar o resultado do turno no servidor
   (o `Idempotency-Key` já faz isso para `/v1/chat`).
+- **Canal aberto depois da resposta do operador** (corrigido em 2026-11-27): o reply retoma o
+  grafo (grava a resposta) e só depois resolve o ticket. O canal guardava as respostas que já
+  existiam ao abrir e só mandava `final_message` para as novas, então um canal aberto ou reaberto
+  entre as duas gravações mandava só `handoff_update: resolved`, e um aberto depois das duas não
+  mandava nada: a resposta não chegava ao lojista. Agora, ao ver o ticket passar a `resolved` (ou já `resolved` ao abrir) sem
+  ter mandado a resposta, o canal manda a última resposta como `final_message` antes do
+  `handoff_update`, com o mesmo `id` (`final_message:{n}`), e o cliente descarta a repetição
+  depois de uma reconexão. Só faz isso quando o checkpoint marca esse ticket como resolvido no
+  último turno (`escalation`, zerado a cada turno novo), para nunca mandar uma resposta posterior
+  como se fosse a do atendente; se não consegue ler o checkpoint naquele ciclo, segura o
+  `resolved` e tenta no próximo. O chat não repete a bolha quando a mesma resposta já veio do
+  `GET /v1/conversations/{id}` (página carregada entre as duas gravações). Uma página carregada
+  depois do `resolved` não abre o canal e não perde nada: o GET lê o status antes das mensagens,
+  e a resposta é gravada antes do `resolved`.
+  **Ainda em aberto**: a expiração (`ops/scheduler.py::_expire_sweep`) segue o mesmo padrão
+  (grava a mensagem de expiração e depois marca `expired`); um canal aberto entre as duas recebe
+  `handoff_expired` sem essa mensagem. A tela mostra "atendimento encerrado" mesmo assim.
+- **Falha intermitente do E2E `07-hitl-realtime`** (corrigida em 2026-11-27): não era a corrida
+  acima. A resposta do teste levava `Date.now()` (13 dígitos), e ~10% desses números passam no
+  Luhn: o guardrail de saída mascarava a resposta do operador como `[CARTAO]`, como deve, e o
+  texto esperado nunca aparecia. As três falhas no CI (45924616525, 46070852196, 46073927534)
+  tinham números Luhn-válidos. O teste agora usa o carimbo em base 36, sem sequência longa de
+  dígitos; o limite de 5 s e os retries não mudaram.
 - **Custo do canal de eventos** (revisão QA N9): `/v1/conversations/{id}/events` consulta o banco
   a cada 1 s (o ticket, o checkpoint da conversa e o último handoff: 3 leituras) e fecha após 60
   ciclos; o navegador reabre. São no máximo 3 canais por usuário (`SSE_EVENTS_MAX_PER_USER`), ou

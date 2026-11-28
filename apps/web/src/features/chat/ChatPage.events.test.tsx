@@ -93,6 +93,18 @@ describe("ChatPage: resposta do atendente em tempo real (FR-010, T065)", () => {
     );
   });
 
+  it("final_message igual à última resposta já carregada não duplica a bolha", async () => {
+    // A página carregou entre a gravação da resposta e o `resolved`: o GET já trouxe a
+    // resposta, e o canal a entrega de novo antes do status (docs/limitations.md §6).
+    const source = await openAwaiting();
+    act(() =>
+      source.emit("final_message", { content: "Resposta antiga do assistente" }, "final_message:1"),
+    );
+    expect(await screen.findByText(/^respondido$/i)).toBeInTheDocument();
+    expect(screen.getAllByText("Resposta antiga do assistente")).toHaveLength(1);
+    await waitFor(() => expect(composer()).toBeEnabled());
+  });
+
   it("handoff_update: atualiza o estado do handoff", async () => {
     const source = await openAwaiting();
     act(() =>
