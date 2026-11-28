@@ -83,6 +83,9 @@ class Settings(BaseSettings):
     # Periodic SLA / expiry / retention tick (app/ops/scheduler.py). The test suite turns it off
     # and calls run_tick directly: a tick racing the per-test TRUNCATE deadlocked Postgres.
     scheduler_enabled: bool = True
+    # `/v1/chat/stream` sends the answer text while it is generated (`token` events). False
+    # keeps the stream to steps + final answer only.
+    chat_stream_tokens: bool = True
 
     seed_reference_date: date | None = None
 

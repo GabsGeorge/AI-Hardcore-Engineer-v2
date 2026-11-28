@@ -50,6 +50,7 @@
     "inputPlaceholder": "Ask about fees, card machine, Pix, receivables advance…",
     "send": "Send",
     "thinking": "Thinking…",
+    "verifying": "Checking the answer against the sources…",
     "sources": "Sources",
     "rateLimited": "Too many messages in a short time. Wait {{seconds}} s before sending again.",
     "errors": {

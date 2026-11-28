@@ -50,6 +50,7 @@
     "inputPlaceholder": "Pergunte sobre taxas, maquininha, Pix, antecipação…",
     "send": "Enviar",
     "thinking": "Pensando…",
+    "verifying": "Verificando a resposta nas fontes…",
     "sources": "Fontes",
     "rateLimited": "Muitas mensagens em pouco tempo. Aguarde {{seconds}} s antes de enviar de novo.",
     "errors": {

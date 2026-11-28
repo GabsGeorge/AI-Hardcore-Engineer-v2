@@ -57,6 +57,32 @@ async function ask(page: Page, text: string) {
 }
 
 test.describe("Chat — o que o lojista vê", () => {
+  test("com eventos token, o que fica na tela é só a resposta do done", async ({ page }) => {
+    // O rascunho (token) é texto ainda não verificado; aqui o servidor o troca no done. O estado
+    // intermediário (rascunho visível com "verificando") é coberto no Vitest, onde o fluxo pode
+    // ser pausado (ChatPage.streaming.test.tsx).
+    await asMerchant(page, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: sse([
+          ["agent_step", { node: "knowledge" }],
+          ["token", { text: "RASCUNHO: a taxa seria de 0,10% " }],
+          ["token_reset", {}],
+          ["token", { text: "RASCUNHO: outra versão " }],
+          ["done", FINAL],
+        ]),
+      }),
+    );
+    await ask(page, "Qual a taxa do débito acima de 80 mil?");
+
+    await expect(page.getByRole("log").getByText(/0,85%/)).toBeVisible();
+    await expect(page.getByText(/RASCUNHO/)).toHaveCount(0);
+    await expect(page.getByText(/verificando a resposta/i)).toHaveCount(0);
+    await expect(page.getByRole("log").getByText(/0,85%/)).toHaveCount(1);
+    await expect(visibleAlert(page)).toHaveCount(0);
+  });
+
   test("mostra a resposta e a fonte clicável", async ({ page }) => {
     await asMerchant(page, (route) =>
       route.fulfill({

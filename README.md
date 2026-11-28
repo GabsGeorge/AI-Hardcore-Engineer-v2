@@ -10,9 +10,9 @@ na própria máquina — não há dependência de Python ou `make` no host.**
 > **Status**: spec **001** (multi-agent) com as 180 tasks fechadas e spec **002-web-ui** com
 > 104 de 105; a aberta (T056, reenvio do fluxo sem duplicar) tem o teste escrito, marcado como
 > falha esperada até a reconexão existir ([docs/limitations.md](docs/limitations.md) §6 e §7).
-> Testes: **767** no backend (pytest: 403 de unidade, 51 de contrato, 186 de integração, 107 de
-> segurança, 20 de repositório/infra; 763 passam, 3 são pulados e 1 é a falha esperada da T056),
-> **102** no frontend (Vitest) e **21** E2E (Playwright contra a stack real, mais 6 visuais
+> Testes: **794** no backend (pytest: 423 de unidade, 58 de contrato, 186 de integração, 107 de
+> segurança, 20 de repositório/infra; 790 passam, 3 são pulados e 1 é a falha esperada da T056),
+> **106** no frontend (Vitest) e **22** E2E (Playwright contra a stack real, mais 6 visuais
 > pulados por padrão). Os 21 cenários do golden set também rodam no CI, com o modelo roteirizado.
 > Golden set com LLM real: rota exata e fontes em **100%** nas 3 passagens de 2026-11-27, acima do
 > gate de 95% — causa e números em
@@ -317,6 +317,13 @@ pequena: veja as ressalvas no ADR.
 
 Todos os papéis usam `OPENAI_MODEL_PRIMARY` (`gpt-4o-mini` no `.env.example`), com
 `OPENAI_MODEL_FALLBACK` encadeado quando definido; embeddings com `text-embedding-3-small`.
+**Resposta enquanto é gerada**: o chat usa `/v1/chat/stream` e mostra o texto da resposta em
+rascunho, com o aviso "Verificando a resposta nas fontes…", até o servidor mandar a resposta
+verificada (evento `done`), que substitui o rascunho. O rascunho já sai com a máscara de PII e para
+antes de uma promessa financeira; a checagem de grounding só vale na resposta final
+([contrato](specs/001-multi-agent-support/contracts/events.md),
+[docs/limitations.md](docs/limitations.md) §11). `CHAT_STREAM_TOKENS=false` desliga.
+
 `OPENAI_MODEL_CHECKS` (vazio por padrão) troca o modelo das checagens curtas (classificador de
 entrada, verificador de saída, reescrita da busca), todas ou só as de `OPENAI_MODEL_CHECKS_ROLES`.
 Os candidatos medidos em 2026-11-27 não foram adotados: nenhum era mais rápido de forma relevante,

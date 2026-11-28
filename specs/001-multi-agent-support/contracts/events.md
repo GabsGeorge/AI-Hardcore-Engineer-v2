@@ -8,9 +8,26 @@ mesmo Bearer token das rotas REST.
 | Evento | `data` | Ordem |
 | --- | --- | --- |
 | `agent_step` | `{node: string, status: "start"\|"end", ts}` | 0..n, na ordem de execução |
-| `token` | `{text: string}` | 0..n, somente durante `synthesize` |
+| `token` | `{text: string}` | 0..n, antes do `done`: pedaço seguinte do texto da resposta enquanto ela é gerada |
+| `token_reset` | `{}` | 0..n: a resposta em geração foi descartada (replanejamento); o cliente limpa o rascunho |
 | `done` | `ChatResponse` completo (openapi.yaml) | exatamente 1, sempre o último |
 | `error` | `Error` (openapi.yaml) | substitui `done` em falha |
+
+**`token` é um rascunho, `done` é a resposta.** Os `token` saem antes de o guardrail de saída
+rodar, então o cliente os mostra como texto ainda não verificado e, ao receber `done`, exibe
+**somente** `done.response` (que pode ser diferente: resposta reescrita, trocada por "não
+encontrei base" ou encaminhada a um atendente). Se o fluxo cair sem `done`, o rascunho é
+descartado. Regras do servidor (`src/app/api/token_stream.py`):
+
+- só o texto que o lojista vai ler: com um especialista no plano, a resposta dele; com vários, só
+  a síntese. Classificador, planejador, reescrita da busca e verificador nunca aparecem;
+- a máscara de PII é aplicada ao texto acumulado antes de cada envio, e os últimos 32 caracteres
+  e a palavra em curso ficam retidos, para um documento, cartão, telefone ou e-mail nunca sair em
+  pedaços antes de a máscara vê-lo inteiro;
+- promessa financeira (estorno, reembolso, chargeback, taxa zerada) interrompe os `token` daquela
+  resposta antes de a frase aparecer;
+- o fim do texto não é enviado em `token` (fica retido): o `done` sempre traz a resposta inteira;
+- `CHAT_STREAM_TOKENS=false` desliga os `token` e mantém o resto do fluxo.
 
 ## `GET /v1/conversations/{id}/events`
 
