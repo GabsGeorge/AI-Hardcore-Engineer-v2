@@ -33,8 +33,9 @@ components:
       properties:
         status: { type: string, enum: [pending] }
       description: >
-        Resposta deliberadamente genérica para e-mails novos, existentes ou mal-formados;
-        o cliente nunca descobre se a conta existe (FR-004).
+        Resposta deliberadamente genérica para e-mails novos e existentes; o cliente nunca
+        descobre se a conta existe (FR-004). Um e-mail sintaticamente inválido recebe 422 antes
+        de qualquer consulta, então o 422 também não revela existência.
     RegisterRequest:
       type: object
       required: [display_name, email, password]
@@ -119,6 +120,8 @@ paths:
                  content: { application/json: { schema: { $ref: "#/components/schemas/GenericOk" } } } }
         "410": { description: Token inválido, expirado ou usado,
                  content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { description: Corpo inválido (validation_error),
+                 content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/auth/login:
     post:
       summary: Autentica; emite cookies session + csrf
@@ -138,6 +141,8 @@ paths:
                  content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "423": { description: Conta temporariamente bloqueada,
                  content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { description: Corpo inválido (validation_error),
+                 content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
         "429": { description: Rate-limited por IP,
                  content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/auth/logout:
@@ -155,6 +160,10 @@ paths:
       responses:
         "202": { description: GenericPending,
                  content: { application/json: { schema: { $ref: "#/components/schemas/GenericPending" } } } }
+        "422": { description: E-mail mal-formado (validation_error), sem consultar contas,
+                 content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "429": { description: Rate-limited (IP ou e-mail),
+                 content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/auth/password/reset:
     post:
       summary: Troca a senha; revoga todas as sessões da conta
@@ -166,6 +175,8 @@ paths:
         "200": { description: Trocada,
                  content: { application/json: { schema: { $ref: "#/components/schemas/GenericOk" } } } }
         "410": { description: Token inválido/expirado/usado,
+                 content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
+        "422": { description: Corpo inválido (validation_error) ou senha fraca (weak_password),
                  content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } } }
   /v1/auth/sessions:
     get:

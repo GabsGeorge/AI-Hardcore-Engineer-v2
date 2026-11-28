@@ -181,7 +181,7 @@ antes de qualquer tela.
 - [x] T034 [P] Script de seed de admin: `scripts/create_demo_admin.py` que lê
       `ADMIN_SEED_EMAIL`/`ADMIN_SEED_PASSWORD` do `.env` e cria/atualiza o admin em dev; falha
       explícita se `APP_ENV=production`. Documentado no quickstart.
-- [ ] T035 [P] Testes de observabilidade do backend *(auditoria 2026-11-24: não feito: não existem `tests/integration/test_auth_metrics.py` nem os spans `auth.login`/`auth.send_email`; as métricas `getnet_auth_*` existem em `metrics.py`)*: `getnet_auth_login_total{outcome}`,
+- [x] T035 [P] Testes de observabilidade do backend *(2026-11-28: feito — `tests/integration/test_auth_metrics.py`; spans `auth.login` (atributo `auth.outcome`) e `auth.send_email` (`email.kind`, `email.delivered`, sem o endereço) criados em `auth_endpoints.py` e `ops/mailer.py`)*: `getnet_auth_login_total{outcome}`,
       `getnet_sessions_active`, spans `auth.login` e `auth.send_email`. Teste em
       `tests/integration/test_auth_metrics.py`.
 
@@ -200,19 +200,19 @@ DESIGN.md congelam o visual; design system está pronto para ser consumido.
 
 ### Testes (escrever primeiro, devem falhar)
 
-- [ ] T036 [P] [US1] Contract test de `auth.yaml` *(auditoria 2026-11-24: não feito: `tests/contract/test_auth_api.py` não existe; o fuzz em `tests/contract/test_openapi_fuzz.py` cobre só `/v1/chat` e requests sem auth)*: `tests/contract/test_auth_api.py` com
+- [x] T036 [P] [US1] Contract test de `auth.yaml` *(2026-11-28: feito — `tests/contract/test_auth_api.py` valida cada resposta de `/v1/auth/*` contra `auth.yaml` com o Schemathesis (status documentado e schema); o contrato ganhou os 422 que a API já devolvia em login, verify-email, reset-request e reset, e o 429 do reset-request)*: `tests/contract/test_auth_api.py` com
       schemathesis sobre `/v1/auth/*` (apenas códigos ≥ 400 na suíte rápida; a sweep
       profunda roda no job `schema` da CI). [REQ-API-02]
 - [x] T037 [P] [US1] Integração: `tests/integration/test_auth_register_flow.py` — cadastro
       com e-mail novo retorna GenericPending e Mailpit tem 1 mensagem; cadastro com e-mail já
       existente retorna GenericPending **sem** adicionar mensagem no Mailpit (sem
       enumeração). [FR-001, FR-004]
-- [ ] T038 [P] [US1] Integração: `tests/integration/test_auth_verify.py` *(auditoria 2026-11-24: não feito: o arquivo não existe e token usado/expirado → 410 não tem teste)* — token válido
+- [x] T038 [P] [US1] Integração: `tests/integration/test_auth_verify.py` *(2026-11-28: feito — `tests/integration/test_auth_verify.py`; link adulterado, desconhecido ou de outro propósito também dá 410, como o contrato define, para não revelar qual token existe)* — token válido
       ativa; token usado dá 410; token expirado dá 410. [FR-002]
-- [ ] T039 [P] [US1] Integração: `tests/integration/test_auth_login.py` *(auditoria 2026-11-24: parcial: `tests/integration/test_auth_login_and_logout.py` cobre cookies endurecidos e logout que revoga; a listagem em `/v1/auth/sessions` não tem teste)* — cookie session +
+- [x] T039 [P] [US1] Integração: `tests/integration/test_auth_login.py` *(2026-11-28: feito — `test_auth_login_and_logout.py::test_sessions_lists_each_live_session_and_drops_one_after_logout`)* — cookie session +
       csrf voltam; sessão aparece em `/v1/auth/sessions`; logout limpa cookies e revoga.
       [FR-007, FR-008]
-- [ ] T040 [P] [US1] Integração: `tests/integration/test_auth_reset.py` *(auditoria 2026-11-24: parcial: `test_auth_login_and_logout.py::test_reset_password_revokes_every_live_session` cobre a revogação; "mesmo link não serve de novo" não tem teste)* — reset troca a senha,
+- [x] T040 [P] [US1] Integração: `tests/integration/test_auth_reset.py` *(2026-11-28: feito — `tests/integration/test_auth_reset.py`; achou e corrigiu um defeito: a senha fraca gastava o link, agora a força é checada antes de consumir o token)* — reset troca a senha,
       revoga **todas** as sessões, mesmo link não serve de novo. [FR-006]
 - [x] T041 [P] [US1] Segurança: `tests/security/test_auth_enumeration.py` — tempo de resposta
       não vaza existência (medir em 50 chamadas; p95 do existente / p95 do inexistente < 1,2);
@@ -272,12 +272,12 @@ fonte com link; perguntar "quero falar com um humano" e ver o status mudar.
       detecta vencimento. [REQ-API-07, FR-011]
 - [x] T053 [P] [US2] `apps/web/src/features/chat/ChatPage.test.tsx` (Vitest+RTL):
       ordem das etapas, resposta final, fontes clicáveis, estado "aguardando atendente".
-- [ ] T054 [P] [US2] Playwright `apps/web/e2e/02-chat.spec.ts` cobre o cenário completo. *(auditoria 2026-11-24: parcial: `apps/web/e2e/05-chat.spec.ts` cobre a tela do chat com o servidor simulado no navegador; o fluxo com login e api reais está em `07-hitl-realtime.spec.ts` só para o HITL)*
+- [x] T054 [P] [US2] Playwright `apps/web/e2e/02-chat.spec.ts` cobre o cenário completo. *(2026-11-28: feito — `apps/web/e2e/02-chat.spec.ts` com a stack real: pergunta de recebimentos respondida com os dados da tool, reaberta pelo histórico; pergunta sem base encaminhada ao atendente)*
       [FR-010, FR-011]
 - [x] T055 [P] [US2] XSS: `tests/security/test_chat_render.py` — resposta do grafo contendo
       `<script>` chega ao front como texto (`textContent` igual ao original; `innerHTML` do
       container de mensagens não ganha novas tags). [FR-012]
-- [ ] T056 [P] [US2] Streaming: `tests/integration/test_chat_stream_mergeback.py` *(auditoria 2026-11-24: não feito: o POST do chat não reconecta nem desduplica por `trace_id`; registrado em docs/limitations.md)* — refaz a
+- [ ] T056 [P] [US2] Streaming: `tests/integration/test_chat_stream_mergeback.py` *(2026-11-28: teste escrito — `tests/integration/test_chat_stream_mergeback.py`, `xfail(strict=True)`: um reenvio com a mesma `Idempotency-Key` ainda abre outra conversa; a reconexão do POST não está implementada, docs/limitations.md §6)* — refaz a
       sessão (dropa `EventSource`), reconecta, confere que não há mensagem duplicada
       (dedup por `trace_id`). [FR-013]
 

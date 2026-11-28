@@ -20,6 +20,7 @@ from app.auth.one_time_tokens import Purpose
 from app.core.config import get_settings
 from app.observability.logging import get_logger
 from app.observability.metrics import AUTH_EMAIL_ERRORS, AUTH_EMAIL_SENT
+from app.observability.tracing import span
 
 Language = Literal["pt", "en"]
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "mail_templates"
@@ -44,6 +45,17 @@ def _link(path: str, token: str) -> str:
 
 
 async def _send(*, to: str, subject: str, body: str, kind: str) -> EmailResult:
+    """One ``auth.send_email`` span per e-mail (T035), with the kind and the outcome; never the
+    address, which is personal data."""
+    with span("auth.send_email", **{"email.kind": kind}) as current:
+        result = await _deliver(to=to, subject=subject, body=body, kind=kind)
+        current.set_attribute("email.delivered", result.delivered)
+        if result.error:
+            current.set_attribute("email.error", result.error)
+        return result
+
+
+async def _deliver(*, to: str, subject: str, body: str, kind: str) -> EmailResult:
     settings = get_settings()
     if not settings.smtp_url:
         get_logger().warning("mail_disabled", kind=kind)

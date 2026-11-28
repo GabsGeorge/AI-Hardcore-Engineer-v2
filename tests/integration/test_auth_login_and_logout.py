@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import httpx
 import pytest
+from fastapi import FastAPI
 from pydantic import SecretStr
 
 from app.auth import one_time_tokens, passwords, repo
@@ -109,3 +110,32 @@ async def test_login_with_wrong_password_locks_after_five_attempts(
     )
     assert locked.status_code == 423
     assert locked.headers.get("retry-after")
+
+
+async def test_sessions_lists_each_live_session_and_drops_one_after_logout(
+    client: httpx.AsyncClient, app: FastAPI, db_pool: Pool
+) -> None:
+    """T039: every login is a session in /v1/auth/sessions, only the caller's is ``current``,
+    and a session that logs out leaves the listing of the others."""
+    await _active_account(db_pool)
+    body = {"email": "ok@loja.example", "password": "senha-segura-demo"}
+    assert (await client.post("/v1/auth/login", json=body)).status_code == 200
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as phone:
+        assert (await phone.post("/v1/auth/login", json=body)).status_code == 200
+
+        listed = (await client.get("/v1/auth/sessions")).json()
+        assert len(listed) == 2
+        assert [s["current"] for s in listed].count(True) == 1
+        phone_sessions = (await phone.get("/v1/auth/sessions")).json()
+        phone_jti = next(s["jti"] for s in phone_sessions if s["current"])
+        assert phone_jti in {s["jti"] for s in listed}
+
+        csrf = {"X-CSRF-Token": phone.cookies["csrf"]}
+        assert (await phone.post("/v1/auth/logout", headers=csrf)).status_code == 204
+
+    after = (await client.get("/v1/auth/sessions")).json()
+    assert len(after) == 1
+    assert after[0]["current"] is True
+    assert after[0]["jti"] != phone_jti
